@@ -1,0 +1,19 @@
+project_id = "athxpqwengfnbbyjqbnq"
+
+# Pi access tokens are not Supabase Auth JWTs. These Edge Functions validate
+# each Pi token against the Pi Platform API /me endpoint themselves.
+[functions.pi-auth]
+verify_jwt = false
+
+[functions.start-quiz]
+verify_jwt = false
+
+[functions.submit-answer]
+verify_jwt = false
+
+[functions.leaderboard]
+verify_jwt = false
+
+# This endpoint is protected by the server-only PI_BRAIN_ADMIN_SECRET header.
+[functions.generate-questions]
+verify_jwt = false
