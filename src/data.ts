@@ -1,5 +1,5 @@
 export type Question = {
-  id: string; category: string; difficulty: "Easy" | "Medium" | "Hard";
+  id: string; category: string; difficulty: "Easy" | "Medium" | "Hard" | "Very Hard" | "Expert";
   prompt: string; options: string[]; answer: number; explanation: string;
   provenance: "AI-generated-original"; reviewStatus: "human-reviewed-demo";
 };

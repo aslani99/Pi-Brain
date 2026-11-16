@@ -34,18 +34,18 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const category = typeof body.category === "string" ? body.category.trim().slice(0, 64) : "General";
     const locale = typeof body.locale === "string" && /^[a-z]{2}(-[A-Z]{2})?$/.test(body.locale) ? body.locale : "en";
-    const count = Math.min(20, Math.max(1, Number.isInteger(body.count) ? body.count : 10));
-    const difficulty = ["easy", "medium", "hard", "mixed"].includes(body.difficulty) ? body.difficulty : "mixed";
+    const count = Math.min(200, Math.max(1, Number.isInteger(body.count) ? body.count : 25));
+    const difficulty = ["easy", "medium", "hard", "very_hard", "expert", "mixed"].includes(body.difficulty) ? body.difficulty : "mixed";
     const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) return json(req, { error: "OPENAI_API_KEY is not configured in Supabase secrets." }, 503);
 
     const admin = getAdminClient();
     const { data: previousQuestions, error: previousError } = await admin.from("questions")
       .select("prompt").eq("category", category).eq("locale", locale)
-      .neq("review_status", "rejected").order("created_at", { ascending: false }).limit(60);
+      .neq("review_status", "rejected").order("created_at", { ascending: false }).limit(120);
     if (previousError) throw previousError;
-    const alreadyUsed = (previousQuestions ?? []).map((item) => `- ${item.prompt}`).join("\n");
-    const prompt = `Create ${count} original multiple-choice trivia questions. Topic: ${category}. Language: ${locale}. Difficulty: ${difficulty}. Write every question from scratch; do not imitate or reproduce quiz-bank wording. Avoid duplicates not only in phrasing but also in the underlying fact, answer, or learning objective. These questions have already been used in this topic and language; do not ask about the same facts or concepts again:\n${alreadyUsed || "(No existing questions in this category and locale.)"}\nAvoid ambiguous wording, stereotypes, medical/legal advice, and political persuasion. Each question must have exactly four options, one defensible correct answer, a concise explanation, and source references that a human editor can use to verify the fact. Do not claim that anything has been verified. Return JSON only in this shape: {"questions":[{"prompt":"...","options":["...","...","...","..."],"answer_index":0,"difficulty":"easy|medium|hard","explanation":"...","source_refs":[{"title":"...","url":"https://..."}]}]}.`;
+    const alreadyUsed = (previousQuestions ?? []).map((item: { prompt: string }) => `- ${item.prompt}`).join("\n");
+    const prompt = `Create ${count} original multiple-choice trivia questions. Topic: ${category}. Language: ${locale}. Difficulty: ${difficulty}. Write every question from scratch; do not imitate or reproduce quiz-bank wording. Avoid duplicates not only in phrasing but also in the underlying fact, answer, or learning objective. These questions have already been used in this topic and language; do not ask about the same facts or concepts again:\n${alreadyUsed || "(No existing questions in this category and locale.)"}\nAvoid ambiguous wording, stereotypes, medical/legal advice, and political persuasion. Each question must have exactly four options, one defensible correct answer, a concise explanation, and source references that a human editor can use to verify the fact. Do not claim that anything has been verified. Return JSON only in this shape: {"questions":[{"prompt":"...","options":["...","...","...","..."],"answer_index":0,"difficulty":"easy|medium|hard|very_hard|expert","explanation":"...","source_refs":[{"title":"...","url":"https://..."}]}]}.`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       const fp = await fingerprint(q.prompt);
       if (seen.has(fp)) continue;
       seen.add(fp);
-      const qDifficulty = ["easy", "medium", "hard"].includes(q.difficulty) ? q.difficulty : "medium";
+      const qDifficulty = ["easy", "medium", "hard", "very_hard", "expert"].includes(q.difficulty) ? q.difficulty : (difficulty === "mixed" ? "medium" : difficulty);
       const sourceRefs = Array.isArray(q.source_refs) ? q.source_refs.slice(0, 5).filter((ref: any) =>
         ref && typeof ref.title === "string" && typeof ref.url === "string" && /^https:\/\//.test(ref.url)
       ) : [];
@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
     const { data: existing, error: existingError } = await admin.from("questions")
       .select("prompt_fingerprint").in("prompt_fingerprint", fingerprints);
     if (existingError) throw existingError;
-    const existingSet = new Set((existing ?? []).map((row) => row.prompt_fingerprint));
+    const existingSet = new Set((existing ?? []).map((row: { prompt_fingerprint: string | null }) => row.prompt_fingerprint).filter((value: string | null): value is string => typeof value === "string"));
     const exactFreshRows = rows.filter((row) => !existingSet.has(row.prompt_fingerprint as string));
     if (!exactFreshRows.length) {
       return json(req, { status: "no_new_questions", saved: 0, duplicates_or_conflicts: rows.length, review_status: "draft" });

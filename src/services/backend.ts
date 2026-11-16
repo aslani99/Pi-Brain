@@ -17,6 +17,30 @@ export type LeaderboardEntry = {
   total_xp: number;
 };
 
+export type QuizDifficulty = "easy" | "medium" | "hard" | "very_hard" | "expert";
+
+export type ServerQuestion = {
+  id: string;
+  category: string;
+  difficulty: QuizDifficulty;
+  prompt: string;
+  options: string[];
+};
+
+export type QuizCatalog = {
+  categories: string[];
+  progress: Record<string, number>;
+};
+
+export type QuizSessionStart = {
+  session_id: string;
+  path_key: string;
+  stage: number;
+  question_count: number;
+  difficulty: QuizDifficulty;
+  questions: ServerQuestion[];
+};
+
 const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? "").replace(/\/$/, "");
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
   ?? import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -39,8 +63,7 @@ async function invoke<T>(
     headers: {
       "Content-Type": "application/json",
       apikey: publishableKey,
-      // Edge Functions verify the Pi access token themselves. Supabase verify_jwt
-      // is disabled for these endpoints in supabase/config.toml by design.
+      // Pi access tokens are verified by the Edge Function, not Supabase Auth.
       Authorization: `Bearer ${piAccessToken}`,
     },
     body: JSON.stringify(body),
@@ -61,17 +84,23 @@ export function fetchLeaderboard(accessToken: string) {
   return invoke<{ entries: LeaderboardEntry[] }>("leaderboard", accessToken, { limit: 50 });
 }
 
-export function startServerQuiz(accessToken: string, category: string, locale: string) {
+export function fetchQuizCatalog(accessToken: string, locale: string) {
+  return invoke<QuizCatalog>("quiz-catalog", accessToken, { locale });
+}
+
+export function startServerQuiz(accessToken: string, pathKey: string, locale: string) {
+  return invoke<QuizSessionStart>("start-quiz", accessToken, { path_key: pathKey, locale });
+}
+
+export function fetchNextServerQuestion(accessToken: string, sessionId: string) {
   return invoke<{
-    session_id: string;
-    questions: Array<{
-      id: string;
-      category: string;
-      difficulty: "easy" | "medium" | "hard";
-      prompt: string;
-      options: string[];
-    }>;
-  }>("start-quiz", accessToken, { category, locale, count: 5 });
+    question: ServerQuestion;
+    question_index: number;
+    stage: number;
+    question_count: number;
+    difficulty: QuizDifficulty;
+    path_key: string;
+  }>("next-question", accessToken, { session_id: sessionId });
 }
 
 export function submitServerAnswer(
@@ -87,6 +116,9 @@ export function submitServerAnswer(
     points_awarded: number;
     score: number;
     completed: boolean;
+    stage: number;
+    next_stage: number;
+    stage_advanced: boolean;
     duplicate?: boolean;
     profile: Pick<PiVerifiedProfile, "total_xp" | "total_answered" | "total_correct" | "day_streak" | "last_active_date">;
   }>("submit-answer", accessToken, {

@@ -1,14 +1,14 @@
-import { useState } from "react";
+import { useState, type PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
-import { Activity, Atom, Award, BrainCircuit, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Cpu, Flame, Globe2, Home, Languages, Leaf, Lightbulb, LockKeyhole, Menu, Palette, Play, Sparkles, Star, Trophy, UserRound, X, Orbit, Shapes, Volume2, VolumeX, Sun, CheckCircle2 } from "lucide-react";
+import { Activity, Atom, Award, BrainCircuit, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Cpu, Flame, Globe2, Home, Languages, Leaf, Lightbulb, LockKeyhole, Menu, Palette, Play, Sparkles, Star, Trophy, UserRound, X, Orbit, Shapes, Volume2, VolumeX, Sun, CheckCircle2, Shuffle } from "lucide-react";
 import { applyLocale } from "./i18n/config";
 import { categories, questions, type Question } from "./data";
 import { playUiSound, startAmbientMusic, stopAmbientMusic } from "./audio";
 import { authenticatePiUser } from "./services/pi";
-import { fetchLeaderboard, isBackendConfigured, startServerQuiz, submitServerAnswer, type LeaderboardEntry, type PiVerifiedProfile } from "./services/backend";
+import { fetchLeaderboard, fetchNextServerQuestion, fetchQuizCatalog, isBackendConfigured, startServerQuiz, submitServerAnswer, type LeaderboardEntry, type PiVerifiedProfile, type ServerQuestion } from "./services/backend";
 
-const iconMap: Record<string, any> = { Atom, Globe2, Cpu, Leaf, BrainCircuit, Palette, Orbit, Shapes };
+const iconMap: Record<string, any> = { Atom, Globe2, Cpu, Leaf, BrainCircuit, Palette, Orbit, Shapes, Shuffle };
 const themes = [
   { id: "cosmic", name: "Cosmic", fa: "کیهانی", colors: ["#120b32", "#925eff", "#4ce4ff", "#ffd05b"], mode: "dark" },
   { id: "light", name: "Light", fa: "روشن", colors: ["#f4f6ff", "#7655e8", "#23a9c8", "#e6a52c"], mode: "light" },
@@ -56,6 +56,22 @@ function previousDayKey() {
   return `${y}-${m}-${d}`;
 }
 
+function mapServerQuestion(item: ServerQuestion): Question {
+  const difficulty = item.difficulty.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) as Question["difficulty"];
+  return {
+    id: item.id,
+    category: item.category,
+    difficulty,
+    prompt: item.prompt,
+    options: item.options,
+    // The correct answer and explanation remain server-only until grading.
+    answer: -1,
+    explanation: "",
+    provenance: "AI-generated-original",
+    reviewStatus: "human-reviewed-demo",
+  };
+}
+
 function readLocalStats(): LocalStats {
   try {
     const raw = localStorage.getItem("pi-brain-local-stats");
@@ -77,6 +93,11 @@ export default function App() {
   const { t, i18n } = useTranslation();
   const [view, setView] = useState<"home"|"quiz"|"result"|"rankings"|"discover"|"profile">("home");
   const [sessionQuestions, setSessionQuestions] = useState<Question[]>(questions);
+  const [availableCategories, setAvailableCategories] = useState(categories);
+  const [categoryStages, setCategoryStages] = useState<Record<string, number>>({});
+  const [randomStage, setRandomStage] = useState(1);
+  const [quizMeta, setQuizMeta] = useState<{ pathKey: string; stage: number; questionCount: number; difficulty: string } | null>(null);
+  const [questionLoading, setQuestionLoading] = useState(false);
   const [qIndex, setQIndex] = useState(0);
   const [selected, setSelected] = useState<number|null>(null);
   const [checked, setChecked] = useState(false);
@@ -104,7 +125,7 @@ export default function App() {
   const [answerSubmitting, setAnswerSubmitting] = useState(false);
   const [liveLeaderboard, setLiveLeaderboard] = useState<LeaderboardEntry[]>([]);
   const current = sessionQuestions[qIndex] ?? sessionQuestions[0] ?? questions[0];
-  const progress = ((qIndex + (checked ? 1 : 0)) / Math.max(sessionQuestions.length, 1)) * 100;
+  const progress = ((qIndex + (checked ? 1 : 0)) / Math.max(quizMeta?.questionCount ?? sessionQuestions.length, 1)) * 100;
   const navItems = [
     {id:"home",label:t("home"),icon:Home},{id:"discover",label:t("discover"),icon:Sparkles},
     {id:"rankings",label:t("rankings"),icon:Trophy},{id:"profile",label:t("profile"),icon:UserRound}
@@ -113,7 +134,22 @@ export default function App() {
     ? liveLeaderboard.map((entry) => [String(entry.rank), entry.username, entry.total_xp.toLocaleString()])
     : [["1","NovaMind","2,840"],["2","CuriousCat","2,610"],["3","You","2,420"],["4","OrbitFox","2,180"],["5","BlueComet","1,940"]];
 
-  const changeLanguage = (code:string) => { applyLocale(code); setLanguageOpen(false); };
+  const changeLanguage = (code:string) => {
+    applyLocale(code);
+    setLanguageOpen(false);
+    if (piAccessToken) {
+      void fetchQuizCatalog(piAccessToken, code).then((catalog) => {
+        const metadata = new Map(categories.map((item) => [item.name, item]));
+        setAvailableCategories(catalog.categories.map((name, index) => metadata.get(name) ?? ({
+          name, icon: "BrainCircuit",
+          color: ["violet", "blue", "cyan", "green", "pink", "amber", "indigo", "rose"][index % 8],
+          desc: "Explore approved questions in this topic",
+        })));
+        setCategoryStages(catalog.progress ?? {});
+        setRandomStage(catalog.progress?.__random__ ?? 1);
+      }).catch((error) => setToast(error instanceof Error ? error.message : "Could not refresh quiz categories."));
+    }
+  };
   const signInWithPi = async () => {
     if (!isBackendConfigured()) {
       setPiAuthMessage("برای ورود واقعی، ابتدا آدرس پروژه و کلید عمومی Supabase را در فایل .env.local قرار بده.");
@@ -126,6 +162,21 @@ export default function App() {
       setPiProfile(result.profile);
       // Kept in memory only. The Pi access token is deliberately not written to localStorage.
       setPiAccessToken(result.accessToken);
+      try {
+        const catalog = await fetchQuizCatalog(result.accessToken, i18n.language);
+        const metadata = new Map(categories.map((item) => [item.name, item]));
+        setAvailableCategories(catalog.categories.map((name, index) => metadata.get(name) ?? ({
+          name,
+          icon: "BrainCircuit",
+          color: ["violet", "blue", "cyan", "green", "pink", "amber", "indigo", "rose"][index % 8],
+          desc: "Explore approved questions in this topic",
+        })));
+        setCategoryStages(catalog.progress ?? {});
+        setRandomStage(catalog.progress?.__random__ ?? 1);
+      } catch (catalogError) {
+        setToast(catalogError instanceof Error ? catalogError.message : "Could not load quiz categories.");
+        setAvailableCategories(categories);
+      }
       try {
         const leaderboard = await fetchLeaderboard(result.accessToken);
         setLiveLeaderboard(leaderboard.entries);
@@ -150,6 +201,9 @@ export default function App() {
   const signOutPi = () => {
     setPiProfile(null);
     setPiAccessToken(null);
+    setAvailableCategories(categories);
+    setCategoryStages({});
+    setRandomStage(1);
     setRemoteSessionId(null);
     setRemoteFeedback(null);
     setLiveLeaderboard([]);
@@ -164,23 +218,20 @@ export default function App() {
   };
   const toggleSound = () => { const next = !soundOn; setSoundOn(next); if (next) startAmbientMusic(); else stopAmbientMusic(); };
   const startQuiz = async (category?:string) => {
+    const pathKey = category || "__random__";
     if (piAccessToken) {
       try {
-        const remote = await startServerQuiz(piAccessToken, category || "All", i18n.language);
-        const remoteQuestions: Question[] = remote.questions.map((item) => ({
-          id: item.id,
-          category: item.category,
-          difficulty: (item.difficulty.charAt(0).toUpperCase() + item.difficulty.slice(1)) as Question["difficulty"],
-          prompt: item.prompt,
-          options: item.options,
-          // The correct answer is deliberately unknown to the browser until the server grades it.
-          answer: -1,
-          explanation: "",
-          provenance: "AI-generated-original",
-          reviewStatus: "human-reviewed-demo",
-        }));
-        setSessionQuestions(remoteQuestions);
+        const remote = await startServerQuiz(piAccessToken, pathKey, i18n.language);
+        const firstQuestion = remote.questions[0];
+        if (!firstQuestion) throw new Error("The server did not deliver the first question.");
+        setSessionQuestions([mapServerQuestion(firstQuestion)]);
         setRemoteSessionId(remote.session_id);
+        setQuizMeta({
+          pathKey: remote.path_key,
+          stage: remote.stage,
+          questionCount: remote.question_count,
+          difficulty: remote.difficulty.replace(/_/g, " "),
+        });
         setRemoteFeedback(null);
         setQIndex(0);
         setSelected(null);
@@ -189,14 +240,20 @@ export default function App() {
         setView("quiz");
         return;
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Server quiz is not ready yet.";
-        setToast(`${message} Showing the local preview questions for now.`);
+        // A Pi-authenticated user must never silently fall back to local demo data.
+        const message = error instanceof Error ? error.message : "The server quiz could not be started.";
+        setToast(message);
+        return;
       }
     }
-    const list = category && category !== "All" ? questions.filter(q=>q.category===category) : questions;
+
+    const list = pathKey !== "__random__"
+      ? questions.filter((q) => q.category === pathKey)
+      : [...questions].sort(() => Math.random() - 0.5);
     if (!list.length) { setToast("More original questions are being prepared for this topic."); return; }
     setSessionQuestions(list);
     setRemoteSessionId(null);
+    setQuizMeta({ pathKey, stage: 1, questionCount: list.length, difficulty: "demo" });
     setRemoteFeedback(null);
     setQIndex(0);
     setSelected(null);
@@ -215,6 +272,12 @@ export default function App() {
         setRemoteFeedback({ questionId: current.id, correct: result.correct, answerIndex: result.answer_index, explanation: result.explanation });
         setChecked(true);
         setScore(result.score);
+        if (result.completed) {
+          // A retry can report an already-completed session with stage_advanced=false.
+          // The authoritative next_stage is still safe to reflect in the UI.
+          setCategoryStages((currentStages) => ({ ...currentStages, [quizMeta?.pathKey ?? "__random__"]: result.next_stage }));
+          if ((quizMeta?.pathKey ?? "__random__") === "__random__") setRandomStage(result.next_stage);
+        }
         setStats({
           totalXp: result.profile.total_xp,
           totalAnswered: result.profile.total_answered,
@@ -256,12 +319,36 @@ export default function App() {
     try { localStorage.setItem("pi-brain-local-stats", JSON.stringify(nextStats)); }
     catch { /* Progress remains available in memory for this session. */ }
   };
-  const nextQuestion = () => {
-    if (qIndex >= sessionQuestions.length-1) { setView("result"); return; }
-    setQIndex(i=>i+1); setSelected(null); setChecked(false); setRemoteFeedback(null);
+  const nextQuestion = async () => {
+    const totalQuestions = quizMeta?.questionCount ?? sessionQuestions.length;
+    if (qIndex >= totalQuestions - 1) { setView("result"); return; }
+
+    if (remoteSessionId && piAccessToken) {
+      setQuestionLoading(true);
+      try {
+        const delivered = await fetchNextServerQuestion(piAccessToken, remoteSessionId);
+        const next = mapServerQuestion(delivered.question);
+        setSessionQuestions((currentQuestions) => [...currentQuestions.slice(0, qIndex + 1), next]);
+        setQIndex((index) => index + 1);
+        setSelected(null);
+        setChecked(false);
+        setRemoteFeedback(null);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "The next question could not be loaded.";
+        setToast(message);
+      } finally {
+        setQuestionLoading(false);
+      }
+      return;
+    }
+
+    setQIndex((index) => index + 1);
+    setSelected(null);
+    setChecked(false);
+    setRemoteFeedback(null);
   };
 
-  return <div className="app-shell" data-theme={theme} onPointerDown={(event) => { const target = event.target as HTMLElement; if (soundOn && target.closest("button")) { startAmbientMusic(); playUiSound("tap"); } }}>
+  return <div className="app-shell" data-theme={theme} onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => { const target = event.target as HTMLElement; if (soundOn && target.closest("button")) { startAmbientMusic(); playUiSound("tap"); } }}>
     <header className="topbar">
       <button className="brand" onClick={()=>setView("home")} aria-label="Pi Brain home">
         <span className="brand-mark"><Orbit size={22}/></span><span>pi<span className="brand-accent">brain</span></span><span className="brand-beta">COSMIC QUIZ</span>
@@ -289,7 +376,7 @@ export default function App() {
       {view==="home"&&<motion.div key="home" className="page" initial={{opacity:0,scale:.965,y:28,filter:"blur(8px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} exit={{opacity:0,scale:.985,y:-18,filter:"blur(6px)"}} transition={{type:"spring",stiffness:250,damping:25}}>
         <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/>{t("welcome")}</div><h1>{t("greeting")}</h1><p className="muted">{t("subtitle")}</p></div><div className="level-pill"><Sparkles size={15}/>{t("level")}</div></div>
         <section className="hero-card">
-          <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">LIVE QUEST</span></div><h2>Ready to explore<br/><span>the impossible?</span></h2><p>Your curious co-pilot is ready. Jump into a universe of surprising questions, wild facts and brilliant discoveries.</p><motion.button className="primary-button hero-cta" onClick={()=>startQuiz()} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> 5 min</span><span><CircleHelp size={14}/> 8 questions</span><span><Star size={14}/> +120 XP</span></div></div>
+          <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">LIVE QUEST</span></div><h2>Ready to explore<br/><span>the impossible?</span></h2><p>Your curious co-pilot is ready. Jump into a universe of surprising questions, wild facts and brilliant discoveries.</p><motion.button className="primary-button hero-cta" onClick={()=>startQuiz()} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> 5 min</span><span><CircleHelp size={14}/> Stage-based quiz</span><span><Star size={14}/> +120 XP</span></div></div>
           <div className="hero-art"><div className="robot-aura"/><img src="/assets/pi-brain-robot.png" alt="Pi Brain friendly space robot mascot waving and holding a glowing star"/><div className="robot-orbit orbit-a"/><div className="robot-orbit orbit-b"/><div className="mascot-tag"><Sparkles size={14}/> YOUR COSMIC CO-PILOT</div></div>
           <div className="hero-orb orb-one"/><div className="hero-orb orb-two"/><div className="hero-spark spark-a">✦</div><div className="hero-spark spark-b">✧</div><div className="hero-spark spark-c">✦</div>
         </section>
@@ -299,25 +386,25 @@ export default function App() {
           <div className="stat-card"><div className="stat-icon answered"><Check size={18}/></div><div><strong>{stats.totalAnswered}</strong><span>{t("questions")}</span></div></div>
         </section>
         <section className="section-block"><div className="section-heading"><div><div className="eyebrow">FIND YOUR NEXT SPARK</div><h3>{t("categories")}</h3></div><button className="text-button" onClick={()=>setView("discover")}>{t("seeAll")} <ChevronRight size={15}/></button></div>
-          <div className="category-grid">{categories.slice(0,4).map((c,i)=>{const Icon=iconMap[c.icon];return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18,delay:i*.055}}><span className="category-icon"><Icon size={22}/></span><b>{c.name}</b><small>{c.desc}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div>
+          <div className="category-grid">{availableCategories.slice(0,4).map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18,delay:i*.055}}><span className="category-icon"><Icon size={22}/></span><b>{c.name}</b><small>{c.desc}</small><small>Stage {categoryStages[c.name] ?? 1}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div>
         </section>
         <section className="bottom-grid"><div className="panel leaderboard-preview"><div className="section-heading"><div><div className="eyebrow">THIS WEEK</div><h3>{t("leaderboard")}</h3></div><button className="text-button" onClick={()=>setView("rankings")}>{t("seeAll")} <ChevronRight size={15}/></button></div>{leaderboardRows.slice(0,3).map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b>{name}</b><span className="leader-points">{pts} XP</span></div>)}</div>
           <div className="panel progress-panel"><div className="eyebrow">YOUR JOURNEY</div><h3>{t("yourProgress")}</h3><div className="progress-ring"><div><strong>{stats.totalAnswered ? Math.round(stats.totalCorrect / stats.totalAnswered * 100) : 0}%</strong><small>Accuracy</small></div></div><p className="muted">{stats.totalAnswered ? `${stats.totalCorrect} correct answers out of ${stats.totalAnswered}. Keep exploring!` : "Your first answered question will start your progress journey."}</p></div></section>
       </motion.div>}
 
       {view==="quiz"&&<motion.div key="quiz" className="quiz-page" initial={{opacity:0,scale:.965,y:28,filter:"blur(8px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} exit={{opacity:0,scale:.985,y:-18,filter:"blur(6px)"}} transition={{type:"spring",stiffness:250,damping:25}}>
-        <div className="quiz-top"><button className="back-button" onClick={()=>setView("home")}><ChevronLeft size={18}/>{t("back")}</button><span className="quiz-counter">{t("question")} {qIndex+1} {t("of")} {sessionQuestions.length}</span><button className="icon-button quiz-help" onClick={()=>setToast("Your progress is saved in this demo session.")}><CircleHelp size={18}/></button></div>
-        <div className="progress-track"><motion.div className="progress-fill" animate={{width:`${progress}%`}}/></div>
+        <div className="quiz-top"><button className="back-button" onClick={()=>setView("home")}><ChevronLeft size={18}/>{t("back")}</button><span className="quiz-counter">{t("question")} {qIndex+1} {t("of")} {quizMeta?.questionCount ?? sessionQuestions.length}</span><button className="icon-button quiz-help" onClick={()=>setToast(remoteSessionId ? "Your current stage advances only after every question is answered." : "Your progress is saved in this demo session.")}><CircleHelp size={18}/></button></div>
+        <div className="quiz-stage-meta"><span>Stage {quizMeta?.stage ?? 1}</span><span>{quizMeta?.questionCount ?? sessionQuestions.length} questions</span><span>{quizMeta?.difficulty ?? current.difficulty}</span></div><div className="progress-track"><motion.div className="progress-fill" animate={{width:`${progress}%`}}/></div>
         <AnimatePresence mode="wait"><motion.div key={current.id} className="quiz-card" initial={{opacity:0,x:36,scale:.97,filter:"blur(6px)"}} animate={{opacity:1,x:0,scale:1,filter:"blur(0px)"}} exit={{opacity:0,x:-28,scale:.98,filter:"blur(5px)"}} transition={{type:"spring",stiffness:260,damping:24}}><div className="quiz-mascot-chip"><img src="/assets/pi-brain-robot.png" alt=""/><span>Ready when you are!</span><Sparkles size={13}/></div><div className="quiz-tags"><span className="tag">{current.category}</span><span className="tag subtle">{current.difficulty}</span></div><div className="question-number">0{qIndex+1}</div><h2>{current.prompt}</h2><p className="muted">{t("choose")}</p>
           <div className="answer-list">{current.options.map((option,i)=>{const correctIndex = remoteSessionId ? (remoteFeedback?.questionId===current.id ? remoteFeedback.answerIndex : -1) : current.answer; return <motion.button key={option} onClick={()=>chooseAnswer(i)} disabled={checked || answerSubmitting} className={`answer-option ${selected===i?"chosen":""} ${checked&&i===correctIndex?"right":""} ${checked&&selected===i&&i!==correctIndex?"wrong":""}`} whileTap={{scale:.975,x:3}} animate={{scale:selected===i?1.015:1}} transition={{type:"spring",stiffness:440,damping:23}}><span className="answer-letter">{String.fromCharCode(65+i)}</span><span>{option}</span>{checked&&i===correctIndex&&<Check size={18}/>}</motion.button>})}</div>
           <AnimatePresence>{checked&&<motion.div className={`feedback ${(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?"success":"try-again"}`} initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}}><b>{(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?t("correct"):t("incorrect")}</b>{(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)&&<div className="mini-celebration">✦ +15 XP <Sparkles size={13}/> NICE WORK!</div>}<p>{remoteSessionId ? remoteFeedback?.explanation : current.explanation}</p><span className="feedback-label"><Lightbulb size={14}/>{t("explanation")}</span></motion.div>}</AnimatePresence>
-          {!checked?<motion.button className="primary-button full" disabled={selected===null || answerSubmitting} onClick={checkAnswer} whileHover={{scale:1.015,y:-2}} whileTap={{scale:.96,y:2}} transition={{type:"spring",stiffness:420,damping:18}}>{answerSubmitting?"Saving answer…":t("check")}<ChevronRight size={17}/></motion.button>:<motion.button className="primary-button full" onClick={nextQuestion} whileHover={{scale:1.015,y:-2}} whileTap={{scale:.96,y:2}} transition={{type:"spring",stiffness:420,damping:18}}>{qIndex===sessionQuestions.length-1?t("finish"):t("next")}<ChevronRight size={17}/></motion.button>}
+          {!checked?<motion.button className="primary-button full" disabled={selected===null || answerSubmitting} onClick={checkAnswer} whileHover={{scale:1.015,y:-2}} whileTap={{scale:.96,y:2}} transition={{type:"spring",stiffness:420,damping:18}}>{answerSubmitting?"Saving answer…":t("check")}<ChevronRight size={17}/></motion.button>:<motion.button className="primary-button full" onClick={nextQuestion} disabled={questionLoading} whileHover={{scale:1.015,y:-2}} whileTap={{scale:.96,y:2}} transition={{type:"spring",stiffness:420,damping:18}}>{questionLoading ? "Loading question…" : qIndex===(quizMeta?.questionCount ?? sessionQuestions.length)-1?t("finish"):t("next")}<ChevronRight size={17}/></motion.button>}
         </motion.div></AnimatePresence>
       </motion.div>}
 
       {view==="result"&&<motion.div key="result" className="result-page" initial={{opacity:0,scale:.82,y:24,rotateX:8}} animate={{opacity:1,scale:1,y:0,rotateX:0}} transition={{type:"spring",stiffness:220,damping:18}} exit={{opacity:0,scale:.92,y:-18,filter:"blur(6px)"}}><div className="result-mascot"><img src="/assets/pi-brain-robot.png" alt="Pi Brain robot celebrating"/><div className="result-glow"><Award size={38}/></div></div><div className="eyebrow">DAILY CHALLENGE COMPLETE</div><h1>Curiosity looks good on you.</h1><p className="muted">You made time to discover something new. That's a win.</p><div className="result-score"><strong>{score}</strong><span>/ {sessionQuestions.length} correct</span></div><div className="result-stats"><div><Star/><b>{score*15} XP</b><small>Earned today</small></div><div><Activity/><b>{Math.round(score/Math.max(sessionQuestions.length,1)*100)}%</b><small>Accuracy</small></div><div><Flame/><b>+1 day</b><small>Streak progress</small></div></div><motion.button className="primary-button" onClick={()=>startQuiz()} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}}>{t("playAgain")}<ChevronRight size={17}/></motion.button><button className="text-button centered" onClick={()=>setView("home")}>{t("back")}</button></motion.div>}
 
-      {view==="discover"&&<motion.div key="discover" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">A WORLD OF IDEAS</div><h1>{t("categories")}</h1><p className="muted">Follow a question. Find a new interest. Keep exploring.</p><div className="category-grid discover-grid">{categories.map((c,i)=>{const Icon=iconMap[c.icon];return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18}}><span className="category-icon"><Icon size={22}/></span><b>{c.name}</b><small>{c.desc}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div></motion.div>}
+      {view==="discover"&&<motion.div key="discover" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">A WORLD OF IDEAS</div><h1>{t("categories")}</h1><p className="muted">Follow a question. Find a new interest. Keep exploring.</p><div className="category-grid discover-grid"><motion.button className="category-card violet" onClick={()=>startQuiz()} whileHover={{y:-7,scale:1.025}} whileTap={{scale:.94}}><span className="category-icon"><Shuffle size={22}/></span><b>Random Questions</b><small>All approved categories</small><small>Stage {randomStage}</small><span className="category-arrow"><ChevronRight size={15}/></span></motion.button>{availableCategories.map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18}}><span className="category-icon"><Icon size={22}/></span><b>{c.name}</b><small>{c.desc}</small><small>Stage {categoryStages[c.name] ?? 1}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div></motion.div>}
 
       {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">THE GLOBAL COMMUNITY</div><h1>{t("leaderboard")}</h1><p className="muted">A friendly celebration of daily curiosity.</p><div className="panel ranking-panel">{leaderboardRows.length ? leaderboardRows.map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b>{name}</b><span className="leader-points">{pts} XP</span></div>) : <p className="muted">No Pioneer scores have been recorded yet. Complete a server quiz to appear here.</p>}</div><p className="demo-note"><LockKeyhole size={14}/> {piProfile ? "Live Supabase leaderboard for verified Pi users." : "Preview data only — sign in with Pi to load the live global leaderboard."}</p></motion.div>}
 

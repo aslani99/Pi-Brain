@@ -6,7 +6,7 @@ type PiAuthResult = {
 };
 
 type PiSdk = {
-  init: (options: { version: string; sandbox: boolean }) => void;
+  init: (options: { version: string; sandbox: boolean }) => void | Promise<void>;
   authenticate: (
     scopes: string[],
     onIncompletePaymentFound?: (payment: unknown) => void,
@@ -19,21 +19,24 @@ declare global {
   }
 }
 
-let initialized = false;
+let initialization: Promise<boolean> | null = null;
 
-export function initializePiSdk(): boolean {
-  if (typeof window === "undefined" || !window.Pi) return false;
-  if (!initialized) {
-    const sandbox = import.meta.env.VITE_PI_SANDBOX !== "false";
-    try {
-      window.Pi.init({ version: "2.0", sandbox });
-      initialized = true;
-    } catch {
+export function initializePiSdk(): Promise<boolean> {
+  if (typeof window === "undefined" || !window.Pi) return Promise.resolve(false);
+  if (initialization) return initialization;
+
+  const sandbox = import.meta.env.VITE_PI_SANDBOX !== "false";
+  initialization = Promise.resolve()
+    .then(() => window.Pi!.init({ version: "2.0", sandbox }))
+    .then(() => true)
+    .catch(() => {
+      // Allow a later authentication attempt to retry initialization.
+      initialization = null;
       // Keep the regular web preview usable if the Pi bridge is not authorized here.
-      return false;
-    }
-  }
-  return true;
+      return Promise.resolve(false);
+    });
+
+  return initialization;
 }
 
 export function isPiSdkAvailable(): boolean {
@@ -47,7 +50,7 @@ export async function authenticatePiUser(locale: string): Promise<{
   if (!isBackendConfigured()) {
     throw new Error("First connect the Supabase project using .env.local.");
   }
-  if (!initializePiSdk() || !window.Pi) {
+  if (!(await initializePiSdk()) || !window.Pi) {
     throw new Error("Pi SDK is not available. Open the app in Pi Browser or Pi Sandbox.");
   }
 

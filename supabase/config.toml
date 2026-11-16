@@ -17,3 +17,9 @@ verify_jwt = false
 # This endpoint is protected by the server-only PI_BRAIN_ADMIN_SECRET header.
 [functions.generate-questions]
 verify_jwt = false
+
+[functions.next-question]
+verify_jwt = false
+
+[functions.quiz-catalog]
+verify_jwt = false

@@ -2,13 +2,8 @@ import { bearerToken, handleOptions, json } from "../_shared/http.ts";
 import { verifyPiAccessToken } from "../_shared/pi.ts";
 import { getAdminClient } from "../_shared/supabase.ts";
 
-function shuffle<T>(items: T[]): T[] {
-  const result = [...items];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : "Could not start quiz.";
 }
 
 Deno.serve(async (req) => {
@@ -18,57 +13,63 @@ Deno.serve(async (req) => {
     const token = bearerToken(req);
     if (!token) return json(req, { error: "Sign in with Pi before starting a server quiz." }, 401);
     const identity = await verifyPiAccessToken(token);
-    const body = await req.json();
-    const category = typeof body.category === "string" ? body.category.slice(0, 64) : "All";
+    const body = await req.json().catch(() => ({}));
     const locale = typeof body.locale === "string" && /^[a-z]{2}(-[A-Z]{2})?$/.test(body.locale) ? body.locale : "en";
-    const count = Math.min(10, Math.max(3, Number.isInteger(body.count) ? body.count : 5));
-    const admin = getAdminClient();
+    const pathKey = typeof body.path_key === "string" && body.path_key.length <= 64
+      ? body.path_key.trim()
+      : "__random__";
+    if (!pathKey) return json(req, { error: "Choose a valid quiz category or the random path." }, 400);
 
+    const admin = getAdminClient();
     const { data: profile, error: profileError } = await admin.from("profiles")
       .select("id").eq("pi_uid", identity.uid).single();
     if (profileError || !profile) return json(req, { error: "Pi profile was not found. Sign in again." }, 401);
 
-    const selectFields = "id,category,difficulty,locale,prompt,options";
-    let query = admin.from("questions").select(selectFields).eq("review_status", "approved").eq("locale", locale);
-    if (category && category !== "All") query = query.eq("category", category);
-    let { data: available, error } = await query.limit(200);
-    if (error) throw error;
-
-    // Fall back to approved English questions only when this locale has no approved content.
-    if (!available?.length && locale !== "en") {
-      let fallback = admin.from("questions").select(selectFields).eq("review_status", "approved").eq("locale", "en");
-      if (category && category !== "All") fallback = fallback.eq("category", category);
-      const result = await fallback.limit(200);
-      available = result.data;
-      error = result.error;
-      if (error) throw error;
+    const { data: allocation, error: allocationError } = await admin.rpc("allocate_unseen_quiz", {
+      p_profile_id: profile.id,
+      p_locale: locale,
+      p_path_key: pathKey,
+    });
+    if (allocationError) {
+      const message = allocationError.message || "Question allocation failed.";
+      if (message.includes("INSUFFICIENT_QUESTION_BANK")) {
+        return json(req, {
+          error: "The approved question bank does not contain enough unseen questions for this stage and difficulty. Your stage has not changed. Add and approve more questions, then try again.",
+          code: "INSUFFICIENT_QUESTION_BANK",
+          details: message,
+        }, 409);
+      }
+      if (message.includes("Unknown or unpublished quiz category")) {
+        return json(req, { error: "This category currently has no approved questions." }, 404);
+      }
+      throw allocationError;
     }
-    if (!available?.length) return json(req, { error: "No reviewed questions are published for this topic and language yet." }, 404);
 
-    const selected = shuffle(available).slice(0, Math.min(count, available.length));
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    const { data: session, error: sessionError } = await admin.from("quiz_sessions").insert({
-      profile_id: profile.id,
-      question_ids: selected.map((item) => item.id),
-      current_index: 0,
-      score: 0,
-      expires_at: expiresAt,
-    }).select("id").single();
-    if (sessionError) throw sessionError;
+    const sessionId = allocation?.session_id;
+    if (typeof sessionId !== "string") throw new Error("Question allocation returned an invalid session.");
 
-    // Deliberately omit answer_index and explanation. They are returned only after an answer is submitted.
+    // Delivery, not allocation, writes the permanent history row. Only the
+    // first question is delivered here; later questions are fetched on demand.
+    const { data: delivery, error: deliveryError } = await admin.rpc("deliver_quiz_question", {
+      p_profile_id: profile.id,
+      p_session_id: sessionId,
+    });
+    if (deliveryError) throw deliveryError;
+    const firstQuestion = delivery?.question;
+    if (!firstQuestion || typeof firstQuestion.id !== "string" || !Array.isArray(firstQuestion.options)) {
+      throw new Error("The first quiz question could not be delivered.");
+    }
+
     return json(req, {
-      session_id: session.id,
-      questions: selected.map((item) => ({
-        id: item.id,
-        category: item.category,
-        difficulty: item.difficulty,
-        prompt: item.prompt,
-        options: item.options,
-      })),
+      session_id: sessionId,
+      path_key: allocation.path_key,
+      stage: allocation.stage,
+      question_count: allocation.question_count,
+      difficulty: allocation.difficulty,
+      questions: [firstQuestion],
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not start quiz.";
+    const message = messageOf(error);
     const status = message.includes("invalid or expired") ? 401 : 500;
     return json(req, { error: message }, status);
   }
