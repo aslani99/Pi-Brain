@@ -115,7 +115,7 @@ function readLocalPreferences(cacheKey = PREFERENCES_CACHE_KEY): UserPreferences
     const language = normalizeLocale(typeof value.language === "string" ? value.language : i18n.language);
     return {
       language,
-      quizLanguage: normalizeLocale(typeof value.quizLanguage === "string" ? value.quizLanguage : language),
+      quizLanguage: language,
       theme: themes.some((item) => item.id === value.theme) ? value.theme! : "cosmic",
       soundEnabled: typeof value.soundEnabled === "boolean" ? value.soundEnabled : true,
       reducedMotion: typeof value.reducedMotion === "boolean" ? value.reducedMotion : false,
@@ -129,7 +129,7 @@ export default function App() {
   const { t, i18n } = useTranslation();
   const [view, setView] = useState<"home"|"quiz"|"result"|"rankings"|"discover"|"profile">("home");
   const [sessionQuestions, setSessionQuestions] = useState<Question[]>(questions);
-  const [availableCategories, setAvailableCategories] = useState(categories);
+  const [availableCategories, setAvailableCategories] = useState<typeof categories>([]);
   const [categoryStages, setCategoryStages] = useState<Record<string, number>>({});
   const [randomStage, setRandomStage] = useState(1);
   const [quizMeta, setQuizMeta] = useState<{ pathKey: string; stage: number; questionCount: number; difficulty: string } | null>(null);
@@ -139,8 +139,8 @@ export default function App() {
   const [checked, setChecked] = useState(false);
   const [score, setScore] = useState(0);
   const [languageOpen, setLanguageOpen] = useState(false);
-  const [languageMenuTarget, setLanguageMenuTarget] = useState<"ui" | "quiz">("ui");
-  const [quizLanguage, setQuizLanguage] = useState(() => readLocalPreferences().quizLanguage);
+  // Quiz language always follows the one selected application language.
+  const quizLanguage = normalizeLocale(i18n.language);
   const [themeOpen, setThemeOpen] = useState(false);
   const [theme, setTheme] = useState(() => readLocalPreferences().theme);
   const [reducedMotion, setReducedMotion] = useState(() => readLocalPreferences().reducedMotion);
@@ -178,6 +178,7 @@ export default function App() {
       ? String((error as { code?: unknown }).code ?? "")
       : "";
     if (code === "LOCALE_QUESTION_BANK_EMPTY") return t("questionBankExhausted");
+    if (code === "LOCALE_QUESTION_BANK_EMPTY") return t("questionBankExhausted");
     if (code === "BANK_EMPTY" || detail.includes("bank_empty")) return t("questionBankEmpty");
     if (code === "BANK_EXHAUSTED" || detail.includes("bank_exhausted")) return t("questionBankExhausted");
     if (code === "BANK_TEMPORARILY_UNAVAILABLE" || detail.includes("bank_temporarily_unavailable")) return t("questionBankInsufficient");
@@ -196,38 +197,28 @@ export default function App() {
 
   const changeLanguage = async (code: string) => {
     const language = normalizeLocale(code);
-    if (language === i18n.language) {
-      setLanguageOpen(false);
-      return;
-    }
-    await applyLocale(language);
-    setLanguageOpen(false);
-  };
-
-  const changeQuizLanguage = async (code: string) => {
-    const language = normalizeLocale(code);
-    if (language === quizLanguage) {
-      setLanguageOpen(false);
-      return;
-    }
     if (view === "quiz") {
       setToast(t("finishQuizBeforeLanguageChange"));
       setLanguageOpen(false);
       return;
     }
-    setQuizLanguage(language);
+    if (language === normalizeLocale(i18n.language)) {
+      setLanguageOpen(false);
+      return;
+    }
+    // Discard an old catalog response before requesting the selected locale.
+    catalogRequestRef.current += 1;
+    setAvailableCategories([]);
+    await applyLocale(language);
     setLanguageOpen(false);
     if (!piAccessToken) return;
-
     const requestId = ++catalogRequestRef.current;
-    setAvailableCategories([]);
     try {
       const catalog = await fetchQuizCatalog(piAccessToken, language);
       if (requestId !== catalogRequestRef.current) return;
       const metadata = new Map(categories.map((item) => [item.name, item]));
       setAvailableCategories(catalog.categories.map((name, index) => metadata.get(name) ?? ({
-        name,
-        icon: "BrainCircuit",
+        name, icon: "BrainCircuit",
         color: ["violet", "blue", "cyan", "green", "pink", "amber", "indigo", "rose"][index % 8],
         desc: t("approvedCategories"),
       })));
@@ -235,11 +226,11 @@ export default function App() {
       setRandomStage(catalog.progress?.__random__ ?? 1);
     } catch (error) {
       if (requestId === catalogRequestRef.current) {
-        setAvailableCategories([]);
         setToast(localizeError(error, "catalogLoadError"));
       }
     }
   };
+
   const signInWithPi = async (silent = false) => {
     if (!isBackendConfigured()) {
       if (!silent) setPiAuthMessage(t("backendSetup"));
@@ -252,7 +243,7 @@ export default function App() {
     preferencesReadyRef.current = false;
     setPreferencesHydrated(false);
     if (!silent) setPiAuthMessage("");
-    let authenticatedQuizLocale = quizLanguage;
+    let authenticatedQuizLocale = normalizeLocale(i18n.language);
     try {
       const result = await authenticatePiUser(i18n.language);
       setPiProfile(result.profile);
@@ -271,21 +262,19 @@ export default function App() {
           ? {
               ...localPreferences,
               language: hasCachedPreferences ? localPreferences.language : initialAccountLocale,
-              quizLanguage: hasCachedPreferences ? localPreferences.quizLanguage : initialAccountLocale,
+              quizLanguage: hasCachedPreferences ? localPreferences.language : initialAccountLocale,
             }
           : {
               ...DEFAULT_PREFERENCES,
               ...remote,
-              quizLanguage: remote.quizLanguage || remote.language || result.profile.locale || "en",
+              quizLanguage: remote.language || result.profile.locale || "en",
             };
         const restoredLanguage = normalizeLocale(restored.language);
-        const restoredQuizLanguage = normalizeLocale(restored.quizLanguage || restored.language);
-        authenticatedQuizLocale = restoredQuizLanguage;
+        authenticatedQuizLocale = restoredLanguage;
         preferencesVersionRef.current = remotePreferences.version;
         preferencesReadyRef.current = true;
         skipNextPreferenceSaveRef.current = remotePreferences.version > 0;
         await applyLocale(restoredLanguage);
-        setQuizLanguage(restoredQuizLanguage);
         setTheme(themes.some((item) => item.id === restored.theme) ? restored.theme : "cosmic");
         setSoundOn(restored.soundEnabled);
         setReducedMotion(restored.reducedMotion);
@@ -341,7 +330,7 @@ export default function App() {
   useEffect(() => {
     const preferences: UserPreferences = {
       language: normalizeLocale(i18n.language),
-      quizLanguage,
+      quizLanguage: normalizeLocale(i18n.language),
       theme,
       soundEnabled: soundOn,
       reducedMotion,
@@ -367,7 +356,7 @@ export default function App() {
     }
     const preferences: UserPreferences = {
       language: normalizeLocale(i18n.language),
-      quizLanguage,
+      quizLanguage: normalizeLocale(i18n.language),
       theme,
       soundEnabled: soundOn,
       reducedMotion,
@@ -387,7 +376,6 @@ export default function App() {
             preferencesVersionRef.current = latest.version;
             skipNextPreferenceSaveRef.current = true;
             await applyLocale(latest.preferences.language);
-            setQuizLanguage(normalizeLocale(latest.preferences.quizLanguage || latest.preferences.language));
             setTheme(themes.some((item) => item.id === latest.preferences.theme) ? latest.preferences.theme : "cosmic");
             setSoundOn(latest.preferences.soundEnabled);
             setReducedMotion(latest.preferences.reducedMotion);
@@ -422,7 +410,7 @@ export default function App() {
     preferencesReadyRef.current = false;
     setPreferencesHydrated(false);
     preferencesVersionRef.current = 0;
-    setAvailableCategories(categories);
+    setAvailableCategories([]);
     setCategoryStages({});
     setRandomStage(1);
     setRemoteSessionId(null);
@@ -470,20 +458,8 @@ export default function App() {
       }
     }
 
-    const list = pathKey !== "__random__"
-      ? questions.filter((q) => q.category === pathKey)
-      : [...questions].sort(() => Math.random() - 0.5);
-    const translatedList = list.filter((question) => hasQuestionTranslation(question.id, quizLanguage));
-    if (!translatedList.length) { setToast(t("demoTranslationUnavailable")); return; }
-    setSessionQuestions(translatedList);
-    setRemoteSessionId(null);
-    setQuizMeta({ pathKey, stage: 1, questionCount: translatedList.length, difficulty: "demo" });
-    setRemoteFeedback(null);
-    setQIndex(0);
-    setSelected(null);
-    setChecked(false);
-    setScore(0);
-    setView("quiz");
+    // Never substitute local English demo questions for missing reviewed locale content.
+    setToast(t("signInForLeaderboard"));
   };
   const chooseAnswer = (idx:number) => { if (!checked && !answerSubmitting) setSelected(idx); };
   const checkAnswer = async () => {
@@ -583,15 +559,12 @@ export default function App() {
         </div>
         <button className={`icon-button sound-button ${soundOn ? "sound-on" : ""}`} onClick={toggleSound} aria-label={soundOn ? t("muteSound") : t("enableSound")} title={soundOn ? t("soundOn") : t("soundOff")}>{soundOn ? <Volume2 size={17}/> : <VolumeX size={17}/>}<span>{soundOn ? t("soundOn").toUpperCase() : t("soundOff").toUpperCase()}</span></button>
         <div className="language-wrap">
-          <button className="icon-button language-button" onClick={()=>{setLanguageOpen(v=>!v);setThemeOpen(false)}} aria-label={t("languages")} title={`${t("languages")} / ${t("quizLanguage")}`} aria-expanded={languageOpen}><Languages size={17}/><span>{normalizeLocale(i18n.language).toUpperCase()} · Q:{quizLanguage.toUpperCase()}</span><ChevronDown size={14}/></button>
+          <button className="icon-button language-button" onClick={()=>{setLanguageOpen(v=>!v);setThemeOpen(false)}} aria-label={t("languages")} title={t("languages")} aria-expanded={languageOpen}><Languages size={17}/><span>{normalizeLocale(i18n.language).toUpperCase()}</span><ChevronDown size={14}/></button>
           <AnimatePresence>{languageOpen&&<motion.div className="language-menu language-menu-expanded" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:8}}>
-            <div className="language-menu-tabs">
-              <button className={languageMenuTarget==="ui"?"active":""} onClick={()=>setLanguageMenuTarget("ui")}>{t("languages")}</button>
-              <button className={languageMenuTarget==="quiz"?"active":""} onClick={()=>setLanguageMenuTarget("quiz")}>{t("quizLanguage")}</button>
-            </div>
+
             {localeOptions.map(([code,label])=>{
-              const selectedLanguage = languageMenuTarget === "ui" ? normalizeLocale(i18n.language) : quizLanguage;
-              return <button key={code} onClick={()=>void (languageMenuTarget === "ui" ? changeLanguage(code) : changeQuizLanguage(code))} className={selectedLanguage===code?"selected":""}>{label}{selectedLanguage===code&&<Check size={14}/>}</button>;
+              const selectedLanguage = normalizeLocale(i18n.language);
+              return <button key={code} onClick={()=>void changeLanguage(code)} className={selectedLanguage===code?"selected":""}>{label}{selectedLanguage===code&&<Check size={14}/>}</button>;
             })}
           </motion.div>}</AnimatePresence>
         </div>
@@ -607,7 +580,7 @@ export default function App() {
       {view==="home"&&<motion.div key="home" className="page" initial={{opacity:0,scale:.965,y:28,filter:"blur(8px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} exit={{opacity:0,scale:.985,y:-18,filter:"blur(6px)"}} transition={{type:"spring",stiffness:250,damping:25}}>
         <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/>{t("welcome")}</div><h1>{t("greeting")}</h1><p className="muted">{t("subtitle")}</p></div><div className="level-pill"><Sparkles size={15}/>{t("level")}</div></div>
         <section className="hero-card">
-          <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">{t("liveQuest")}</span></div><h2>{t("heroTitleLine1")}<br/><span>{t("heroTitleLine2")}</span></h2><p>{t("heroDescription")}</p><motion.button className="primary-button hero-cta" onClick={()=>startQuiz()} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> {t("minutes")}</span><span><CircleHelp size={14}/> {t("stageBasedQuiz")}</span><span><Star size={14}/> +120 XP</span></div></div>
+          <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">{t("liveQuest")}</span></div><h2>{t("heroTitleLine1")}<br/><span>{t("heroTitleLine2")}</span></h2><p>{t("heroDescription")}</p><motion.button className="primary-button hero-cta" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> {t("minutes")}</span><span><CircleHelp size={14}/> {t("stageBasedQuiz")}</span><span><Star size={14}/> +120 XP</span></div></div>
           <div className="hero-art"><div className="robot-aura"/><img src="/assets/pi-brain-robot.png" alt={t("coPilot")}/><div className="robot-orbit orbit-a"/><div className="robot-orbit orbit-b"/><div className="mascot-tag"><Sparkles size={14}/> {t("coPilot")}</div></div>
           <div className="hero-orb orb-one"/><div className="hero-orb orb-two"/><div className="hero-spark spark-a">✦</div><div className="hero-spark spark-b">✧</div><div className="hero-spark spark-c">✦</div>
         </section>
@@ -617,7 +590,7 @@ export default function App() {
           <div className="stat-card"><div className="stat-icon answered"><Check size={18}/></div><div><strong>{stats.totalAnswered}</strong><span>{t("questions")}</span></div></div>
         </section>
         <section className="section-block"><div className="section-heading"><div><div className="eyebrow">{t("findNextSpark")}</div><h3>{t("categories")}</h3></div><button className="text-button" onClick={()=>setView("discover")}>{t("seeAll")} <ChevronRight size={15}/></button></div>
-          <div className="category-grid">{availableCategories.length === 0 ? <div className="muted"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p>{quizLanguage !== "en" && <button className="text-button" onClick={()=>void changeQuizLanguage("en")}>{t("switchQuizToEnglish")}</button>}</div> : availableCategories.slice(0,4).map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18,delay:i*.055}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div>
+          <div className="category-grid">{availableCategories.length === 0 ? <div className="muted"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p></div> : availableCategories.slice(0,4).map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18,delay:i*.055}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div>
         </section>
         <section className="bottom-grid"><div className="panel leaderboard-preview"><div className="section-heading"><div><div className="eyebrow">{t("thisWeek")}</div><h3>{t("leaderboard")}</h3></div><button className="text-button" onClick={()=>setView("rankings")}>{t("seeAll")} <ChevronRight size={15}/></button></div>{leaderboardRows.slice(0,3).map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b dir="auto">{name}</b><span className="leader-points">{pts} XP</span></div>)}</div>
           <div className="panel progress-panel"><div className="eyebrow">{t("yourJourney")}</div><h3>{t("yourProgress")}</h3><div className="progress-ring"><div><strong>{stats.totalAnswered ? Math.round(stats.totalCorrect / stats.totalAnswered * 100) : 0}%</strong><small>{t("accuracy")}</small></div></div><p className="muted">{stats.totalAnswered ? t("progressSummary", { correct: stats.totalCorrect, total: stats.totalAnswered }) : t("firstAnswerProgress")}</p></div></section>
@@ -633,9 +606,9 @@ export default function App() {
         </motion.div></AnimatePresence>
       </motion.div>}
 
-      {view==="result"&&<motion.div key="result" className="result-page" initial={{opacity:0,scale:.82,y:24,rotateX:8}} animate={{opacity:1,scale:1,y:0,rotateX:0}} transition={{type:"spring",stiffness:220,damping:18}} exit={{opacity:0,scale:.92,y:-18,filter:"blur(6px)"}}><div className="result-mascot"><img src="/assets/pi-brain-robot.png" alt={t("mascotCelebrating")}/><div className="result-glow"><Award size={38}/></div></div><div className="eyebrow">{t("dailyChallengeComplete")}</div><h1>{t("resultHeadline")}</h1><p className="muted">{t("resultDescription")}</p><div className="result-score"><strong>{score}</strong><span>{t("scoreOfQuestions", { score, total: quizMeta?.questionCount ?? sessionQuestions.length })}</span></div><div className="result-stats"><div><Star/><b>{score*15} XP</b><small>{t("earnedToday")}</small></div><div><Activity/><b>{Math.round(score/Math.max(quizMeta?.questionCount ?? sessionQuestions.length,1)*100)}%</b><small>{t("accuracy")}</small></div><div><Flame/><b>{t("oneDay")}</b><small>{t("streakProgress")}</small></div></div><motion.button className="primary-button" onClick={()=>startQuiz()} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}}>{t("playAgain")}<ChevronRight size={17}/></motion.button><button className="text-button centered" onClick={()=>setView("home")}>{t("back")}</button></motion.div>}
+      {view==="result"&&<motion.div key="result" className="result-page" initial={{opacity:0,scale:.82,y:24,rotateX:8}} animate={{opacity:1,scale:1,y:0,rotateX:0}} transition={{type:"spring",stiffness:220,damping:18}} exit={{opacity:0,scale:.92,y:-18,filter:"blur(6px)"}}><div className="result-mascot"><img src="/assets/pi-brain-robot.png" alt={t("mascotCelebrating")}/><div className="result-glow"><Award size={38}/></div></div><div className="eyebrow">{t("dailyChallengeComplete")}</div><h1>{t("resultHeadline")}</h1><p className="muted">{t("resultDescription")}</p><div className="result-score"><strong>{score}</strong><span>{t("scoreOfQuestions", { score, total: quizMeta?.questionCount ?? sessionQuestions.length })}</span></div><div className="result-stats"><div><Star/><b>{score*15} XP</b><small>{t("earnedToday")}</small></div><div><Activity/><b>{Math.round(score/Math.max(quizMeta?.questionCount ?? sessionQuestions.length,1)*100)}%</b><small>{t("accuracy")}</small></div><div><Flame/><b>{t("oneDay")}</b><small>{t("streakProgress")}</small></div></div><motion.button className="primary-button" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}}>{t("playAgain")}<ChevronRight size={17}/></motion.button><button className="text-button centered" onClick={()=>setView("home")}>{t("back")}</button></motion.div>}
 
-      {view==="discover"&&<motion.div key="discover" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("worldOfIdeas")}</div><h1>{t("categories")}</h1><p className="muted">{t("discoverLead")}</p><div className="category-grid discover-grid">{availableCategories.length === 0 && <div className="muted"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p>{quizLanguage !== "en" && <button className="text-button" onClick={()=>void changeQuizLanguage("en")}>{t("switchQuizToEnglish")}</button>}</div>}<motion.button className="category-card violet" onClick={()=>startQuiz()} whileHover={{y:-7,scale:1.025}} whileTap={{scale:.94}}><span className="category-icon"><Shuffle size={22}/></span><b>{t("randomQuestions")}</b><small>{t("approvedCategories")}</small><small>{t("stageNumber", { stage: randomStage })}</small><span className="category-arrow"><ChevronRight size={15}/></span></motion.button>{availableCategories.map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div></motion.div>}
+      {view==="discover"&&<motion.div key="discover" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("worldOfIdeas")}</div><h1>{t("categories")}</h1><p className="muted">{t("discoverLead")}</p><div className="category-grid discover-grid">{availableCategories.length === 0 && <div className="muted"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p></div>}<motion.button className="category-card violet" onClick={()=>{if (availableCategories.length) void startQuiz(); else setToast(t("questionBankEmpty"));}} disabled={availableCategories.length===0} whileHover={{y:-7,scale:1.025}} whileTap={{scale:.94}}><span className="category-icon"><Shuffle size={22}/></span><b>{t("randomQuestions")}</b><small>{t("approvedCategories")}</small><small>{t("stageNumber", { stage: randomStage })}</small><span className="category-arrow"><ChevronRight size={15}/></span></motion.button>{availableCategories.map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div></motion.div>}
 
       {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("globalCommunity")}</div><h1>{t("leaderboard")}</h1><p className="muted">{t("communityLead")}</p><div className="panel ranking-panel">{leaderboardRows.length ? leaderboardRows.map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b dir="auto">{name}</b><span className="leader-points">{pts} XP</span></div>) : <p className="muted">{t("noScores")}</p>}</div><p className="demo-note"><LockKeyhole size={14}/> {piProfile ? t("liveLeaderboard") : `${t("previewOnly")} — ${t("signInForLeaderboard")} `}</p></motion.div>}
 

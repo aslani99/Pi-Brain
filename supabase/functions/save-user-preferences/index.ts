@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
       return json(req, { error: "Invalid preferences payload." }, 400);
     }
     const language = normalizeSupportedLocale(preferences.language);
-    const quizLanguage = normalizeSupportedLocale(preferences.quizLanguage ?? preferences.language);
+    const quizLanguage = language;
     if (!language || !quizLanguage || !THEMES.has(preferences.theme)
       || typeof preferences.soundEnabled !== "boolean"
       || typeof preferences.reducedMotion !== "boolean") {
