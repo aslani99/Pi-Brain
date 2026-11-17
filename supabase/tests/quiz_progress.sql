@@ -128,6 +128,79 @@ begin
   exception when others then
     if sqlerrm not like 'Unknown or unpublished quiz category:%' then raise; end if;
   end;
+  -- Each quiz locale is an independent bank: the Persian path must allocate
+  -- only Persian rows even though other locales exist in the same database.
+  for v_i in 1..5 loop
+    insert into public.questions(
+      slug, category, difficulty, locale, prompt, options, answer_index,
+      explanation, provenance, review_status, published_at
+    ) values (
+      'locale-fa-' || v_i || '-' || gen_random_uuid()::text,
+      'Locale Only', 'easy', 'fa',
+      'پرسش آزمایشی شماره ' || v_i,
+      jsonb_build_array('درست', 'گزینه ب', 'گزینه پ', 'گزینه ت'),
+      0, 'توضیح آزمایشی', 'human-authored', 'approved', now()
+    );
+  end loop;
+
+  v_alloc := public.allocate_unseen_quiz(v_profile, 'fa', 'Locale Only');
+  if v_alloc->>'bank_status' is distinct from 'BANK_AVAILABLE' then
+    raise exception 'Available locale bank status was not returned';
+  end if;
+  if exists (
+    select 1
+    from jsonb_array_elements_text(v_alloc->'question_ids') selected(id)
+    join public.questions q on q.id = selected.id::uuid
+    where q.locale <> 'fa'
+  ) then
+    raise exception 'Quiz allocation mixed questions from different locales';
+  end if;
+
+  -- A locale with no approved rows is empty, not exhausted, for random
+  -- and category paths alike (even when that category exists in English).
+  begin
+    perform public.allocate_unseen_quiz(v_profile, 'ar', '__random__');
+    raise exception 'An empty locale bank was incorrectly allocated';
+  exception when others then
+    if sqlerrm not like 'BANK_EMPTY%' then raise; end if;
+  end;
+
+  begin
+    perform public.allocate_unseen_quiz(v_profile, 'ar', 'Test Topic');
+    raise exception 'A category with no approved questions in this locale was allocated';
+  exception when others then
+    if sqlerrm not like 'BANK_EMPTY%' then raise; end if;
+  end;
+
+  -- A bank with approved questions that have all been delivered is exhausted.
+  for v_i in 1..5 loop
+    insert into public.questions(
+      slug, category, difficulty, locale, prompt, options, answer_index,
+      explanation, provenance, review_status, published_at
+    ) values (
+      'locale-de-' || v_i || '-' || gen_random_uuid()::text,
+      'Exhaustion Test', 'easy', 'de',
+      'Testfrage Nummer ' || v_i,
+      jsonb_build_array('Richtig', 'Option B', 'Option C', 'Option D'),
+      0, 'Test explanation', 'human-authored', 'approved', now()
+    );
+  end loop;
+
+  v_alloc := public.allocate_unseen_quiz(v_profile, 'de', 'Exhaustion Test');
+  v_session := (v_alloc->>'session_id')::uuid;
+  for v_i in 1..5 loop
+    v_delivery := public.deliver_quiz_question(v_profile, v_session);
+    v_answer := public.record_quiz_answer(
+      v_profile, v_session, (v_delivery->>'question_id')::uuid, 0
+    );
+  end loop;
+
+  begin
+    perform public.allocate_unseen_quiz(v_profile, 'de', 'Exhaustion Test');
+    raise exception 'An exhausted locale bank was incorrectly allocated';
+  exception when others then
+    if sqlerrm not like 'BANK_EXHAUSTED%' then raise; end if;
+  end;
 end $$;
 
 rollback;

@@ -1,8 +1,8 @@
 import { bearerToken, handleOptions, json } from "../_shared/http.ts";
 import { verifyPiAccessToken } from "../_shared/pi.ts";
 import { getAdminClient } from "../_shared/supabase.ts";
+import { normalizeSupportedLocale } from "../_shared/locale.ts";
 
-const LANGUAGES = new Set(["en", "fa", "ar", "de", "es", "fr", "ru", "tr", "hi", "zh", "ja", "pt"]);
 const THEMES = new Set(["cosmic", "light", "ocean", "aurora", "sunset", "royal", "rose"]);
 
 Deno.serve(async (req) => {
@@ -19,7 +19,9 @@ Deno.serve(async (req) => {
     if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) {
       return json(req, { error: "Invalid preferences payload." }, 400);
     }
-    if (!LANGUAGES.has(preferences.language) || !THEMES.has(preferences.theme)
+    const language = normalizeSupportedLocale(preferences.language);
+    const quizLanguage = normalizeSupportedLocale(preferences.quizLanguage ?? preferences.language);
+    if (!language || !quizLanguage || !THEMES.has(preferences.theme)
       || typeof preferences.soundEnabled !== "boolean"
       || typeof preferences.reducedMotion !== "boolean") {
       return json(req, { error: "One or more preference values are invalid." }, 400);
@@ -27,6 +29,12 @@ Deno.serve(async (req) => {
     if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
       return json(req, { error: "A valid preferences version is required." }, 400);
     }
+
+    const normalizedPreferences = {
+      ...preferences,
+      language,
+      quizLanguage,
+    };
 
     const admin = getAdminClient();
     const { data: profile, error: profileError } = await admin
@@ -36,7 +44,7 @@ Deno.serve(async (req) => {
 
     const { data, error } = await admin.rpc("save_user_preferences", {
       p_profile_id: profile.id,
-      p_preferences: preferences,
+      p_preferences: normalizedPreferences,
       p_expected_version: expectedVersion,
     });
     if (error) {

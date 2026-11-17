@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { Activity, Atom, Award, BrainCircuit, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Cpu, Flame, Globe2, Home, Languages, Leaf, Lightbulb, LockKeyhole, Menu, Palette, Play, Sparkles, Star, Trophy, UserRound, X, Orbit, Shapes, Volume2, VolumeX, Sun, CheckCircle2, Shuffle } from "lucide-react";
-import { applyLocale } from "./i18n/config";
+import i18n, { applyLocale, localeOptions, normalizeLocale } from "./i18n/config";
 import { hasQuestionTranslation, localizeCategory, localizeCategoryDescription, localizeDifficulty, localizeQuestion } from "./i18n/question-translations";
 import { categories, questions, type Question } from "./data";
 import { playUiSound, startAmbientMusic, stopAmbientMusic } from "./audio";
@@ -19,11 +19,6 @@ const themes = [
   { id: "royal", name: "Royal", fa: "سلطنتی", colors: ["#17102d", "#7350bc", "#b28aff", "#e7c16c"], mode: "dark" },
   { id: "rose", name: "Rose", fa: "رز", colors: ["#2a1024", "#d85b9b", "#ff9cc9", "#ffd2a1"], mode: "dark" }
 ];
-const languageOptions = [
-  ["en","English"],["fa","فارسی"],["ar","العربية"],["de","Deutsch"],["es","Español"],
-  ["fr","Français"],["ru","Русский"],["tr","Türkçe"],["hi","हिन्दी"],["zh","中文"],["ja","日本語"],["pt","Português"]
-];
-
 type LocalStats = {
   totalXp: number;
   totalAnswered: number;
@@ -91,26 +86,36 @@ function readLocalStats(): LocalStats {
 }
 
 const PREFERENCES_CACHE_KEY = "pi-brain-preferences-v1";
+const preferencesCacheKey = (piUid?: string | null) =>
+  piUid ? `${PREFERENCES_CACHE_KEY}:${piUid}` : PREFERENCES_CACHE_KEY;
 const DEFAULT_PREFERENCES: UserPreferences = {
   language: "en",
+  quizLanguage: "en",
   theme: "cosmic",
   soundEnabled: true,
   reducedMotion: false,
 };
 
-function readLocalPreferences(): UserPreferences {
+function readLocalPreferences(cacheKey = PREFERENCES_CACHE_KEY): UserPreferences {
   try {
-    const raw = localStorage.getItem(PREFERENCES_CACHE_KEY);
+    const raw = localStorage.getItem(cacheKey);
     if (!raw) {
-      const legacyTheme = localStorage.getItem("pi-brain-theme");
+      const legacyTheme = cacheKey === PREFERENCES_CACHE_KEY
+        ? localStorage.getItem("pi-brain-theme")
+        : null;
+      const initialLanguage = normalizeLocale(i18n.language);
       return {
         ...DEFAULT_PREFERENCES,
+        language: initialLanguage,
+        quizLanguage: initialLanguage,
         theme: themes.some((item) => item.id === legacyTheme) ? legacyTheme! : "cosmic",
       };
     }
     const value = JSON.parse(raw) as Partial<UserPreferences>;
+    const language = normalizeLocale(typeof value.language === "string" ? value.language : i18n.language);
     return {
-      language: typeof value.language === "string" ? value.language : "en",
+      language,
+      quizLanguage: normalizeLocale(typeof value.quizLanguage === "string" ? value.quizLanguage : language),
       theme: themes.some((item) => item.id === value.theme) ? value.theme! : "cosmic",
       soundEnabled: typeof value.soundEnabled === "boolean" ? value.soundEnabled : true,
       reducedMotion: typeof value.reducedMotion === "boolean" ? value.reducedMotion : false,
@@ -134,12 +139,15 @@ export default function App() {
   const [checked, setChecked] = useState(false);
   const [score, setScore] = useState(0);
   const [languageOpen, setLanguageOpen] = useState(false);
+  const [languageMenuTarget, setLanguageMenuTarget] = useState<"ui" | "quiz">("ui");
+  const [quizLanguage, setQuizLanguage] = useState(() => readLocalPreferences().quizLanguage);
   const [themeOpen, setThemeOpen] = useState(false);
   const [theme, setTheme] = useState(() => readLocalPreferences().theme);
   const [reducedMotion, setReducedMotion] = useState(() => readLocalPreferences().reducedMotion);
   const [preferencesHydrated, setPreferencesHydrated] = useState(false);
   const [syncRetry, setSyncRetry] = useState(0);
   const preferencesVersionRef = useRef(0);
+  const catalogRequestRef = useRef(0);
   const preferencesReadyRef = useRef(false);
   const skipNextPreferenceSaveRef = useRef(false);
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -158,7 +166,7 @@ export default function App() {
   const sourceCurrent = sessionQuestions[qIndex] ?? sessionQuestions[0] ?? questions[0];
   // Questions delivered by the server are already authored for the requested locale.
   // Only local demo questions should pass through the bundled translation catalogue.
-  const current = remoteSessionId ? sourceCurrent : localizeQuestion(sourceCurrent, i18n.language);
+  const current = remoteSessionId ? sourceCurrent : localizeQuestion(sourceCurrent, quizLanguage);
   const progress = ((qIndex + (checked ? 1 : 0)) / Math.max(quizMeta?.questionCount ?? sessionQuestions.length, 1)) * 100;
   const navItems = [
     {id:"home",label:t("home"),icon:Home},{id:"discover",label:t("discover"),icon:Sparkles},
@@ -169,12 +177,14 @@ export default function App() {
     const code = error && typeof error === "object" && "code" in error
       ? String((error as { code?: unknown }).code ?? "")
       : "";
-    if (code === "LOCALE_QUESTION_BANK_EMPTY" || detail.includes("locale_question_bank_empty")) return t("questionBankEmpty");
+    if (code === "BANK_EMPTY" || detail.includes("bank_empty")) return t("questionBankEmpty");
+    if (code === "BANK_EXHAUSTED" || detail.includes("bank_exhausted")) return t("questionBankExhausted");
+    if (code === "BANK_TEMPORARILY_UNAVAILABLE" || detail.includes("bank_temporarily_unavailable")) return t("questionBankInsufficient");
     if (code === "INSUFFICIENT_QUESTION_BANK" || detail.includes("insufficient_question_bank")) return t("questionBankInsufficient");
-    if (code === "LOCALE_CATEGORY_UNAVAILABLE" || detail.includes("locale_category_unavailable")) return t("categoryUnavailable");
+    if (code === "LOCALE_CATEGORY_UNAVAILABLE" || code === "CATEGORY_UNAVAILABLE"
+      || detail.includes("locale_category_unavailable")) return t("categoryUnavailable");
     if (detail.includes("invalid or expired") || detail.includes("session has expired")) return t("sessionExpired");
     if (detail.includes("profile not found")) return t("profileNotFound");
-    if (detail.includes("no unseen approved questions")) return t("questionBankEmpty");
     if (detail.includes("unknown or unpublished quiz category")) return t("categoryUnavailable");
     return t(fallbackKey);
   };
@@ -183,32 +193,50 @@ export default function App() {
     ? liveLeaderboard.map((entry) => [String(entry.rank), entry.username, entry.total_xp.toLocaleString()])
     : [["1","NovaMind","2,840"],["2","CuriousCat","2,610"],["3",t("you"),"2,420"],["4","OrbitFox","2,180"],["5","BlueComet","1,940"]];
 
-  const changeLanguage = async (code:string) => {
-    if (code === i18n.language) { setLanguageOpen(false); return; }
-    if (remoteSessionId && view === "quiz") {
+  const changeLanguage = async (code: string) => {
+    const language = normalizeLocale(code);
+    if (language === i18n.language) {
+      setLanguageOpen(false);
+      return;
+    }
+    await applyLocale(language);
+    setLanguageOpen(false);
+  };
+
+  const changeQuizLanguage = async (code: string) => {
+    const language = normalizeLocale(code);
+    if (language === quizLanguage) {
+      setLanguageOpen(false);
+      return;
+    }
+    if (view === "quiz") {
       setToast(t("finishQuizBeforeLanguageChange"));
       setLanguageOpen(false);
       return;
     }
-    if (view === "quiz" && !remoteSessionId && sessionQuestions.some((question) => !hasQuestionTranslation(question.id, code))) {
-      setToast(t("demoTranslationUnavailable"));
-      setLanguageOpen(false);
-      return;
-    }
-    const language = await applyLocale(code);
+    setQuizLanguage(language);
     setLanguageOpen(false);
-    if (piAccessToken) {
-      setAvailableCategories([]);
-      void fetchQuizCatalog(piAccessToken, language).then((catalog) => {
-        const metadata = new Map(categories.map((item) => [item.name, item]));
-        setAvailableCategories(catalog.categories.map((name, index) => metadata.get(name) ?? ({
-          name, icon: "BrainCircuit",
-          color: ["violet", "blue", "cyan", "green", "pink", "amber", "indigo", "rose"][index % 8],
-          desc: t("approvedCategories"),
-        })));
-        setCategoryStages(catalog.progress ?? {});
-        setRandomStage(catalog.progress?.__random__ ?? 1);
-      }).catch((error) => setToast(localizeError(error, "catalogLoadError")));
+    if (!piAccessToken) return;
+
+    const requestId = ++catalogRequestRef.current;
+    setAvailableCategories([]);
+    try {
+      const catalog = await fetchQuizCatalog(piAccessToken, language);
+      if (requestId !== catalogRequestRef.current) return;
+      const metadata = new Map(categories.map((item) => [item.name, item]));
+      setAvailableCategories(catalog.categories.map((name, index) => metadata.get(name) ?? ({
+        name,
+        icon: "BrainCircuit",
+        color: ["violet", "blue", "cyan", "green", "pink", "amber", "indigo", "rose"][index % 8],
+        desc: t("approvedCategories"),
+      })));
+      setCategoryStages(catalog.progress ?? {});
+      setRandomStage(catalog.progress?.__random__ ?? 1);
+    } catch (error) {
+      if (requestId === catalogRequestRef.current) {
+        setAvailableCategories([]);
+        setToast(localizeError(error, "catalogLoadError"));
+      }
     }
   };
   const signInWithPi = async (silent = false) => {
@@ -220,7 +248,10 @@ export default function App() {
       try { localStorage.removeItem("pi-brain-explicit-signout"); } catch { /* Storage may be unavailable. */ }
     }
     setPiAuthBusy(true);
+    preferencesReadyRef.current = false;
+    setPreferencesHydrated(false);
     if (!silent) setPiAuthMessage("");
+    let authenticatedQuizLocale = quizLanguage;
     try {
       const result = await authenticatePiUser(i18n.language);
       setPiProfile(result.profile);
@@ -228,14 +259,32 @@ export default function App() {
       setPiAccessToken(result.accessToken);
       try {
         const remotePreferences = await fetchUserPreferences(result.accessToken);
-        const localPreferences = readLocalPreferences();
+        const accountPreferencesKey = preferencesCacheKey(result.profile.pi_uid);
+        const localPreferences = readLocalPreferences(accountPreferencesKey);
+        let hasCachedPreferences = false;
+        try { hasCachedPreferences = Boolean(localStorage.getItem(accountPreferencesKey)); }
+        catch { /* The account preferences from Supabase remain authoritative. */ }
+        const remote = remotePreferences.preferences;
+        const initialAccountLocale = normalizeLocale(result.profile.locale || i18n.language);
         const restored = remotePreferences.version === 0
-          ? { ...localPreferences, language: result.profile.locale || i18n.language }
-          : remotePreferences.preferences;
+          ? {
+              ...localPreferences,
+              language: hasCachedPreferences ? localPreferences.language : initialAccountLocale,
+              quizLanguage: hasCachedPreferences ? localPreferences.quizLanguage : initialAccountLocale,
+            }
+          : {
+              ...DEFAULT_PREFERENCES,
+              ...remote,
+              quizLanguage: remote.quizLanguage || remote.language || result.profile.locale || "en",
+            };
+        const restoredLanguage = normalizeLocale(restored.language);
+        const restoredQuizLanguage = normalizeLocale(restored.quizLanguage || restored.language);
+        authenticatedQuizLocale = restoredQuizLanguage;
         preferencesVersionRef.current = remotePreferences.version;
         preferencesReadyRef.current = true;
         skipNextPreferenceSaveRef.current = remotePreferences.version > 0;
-        await applyLocale(restored.language);
+        await applyLocale(restoredLanguage);
+        setQuizLanguage(restoredQuizLanguage);
         setTheme(themes.some((item) => item.id === restored.theme) ? restored.theme : "cosmic");
         setSoundOn(restored.soundEnabled);
         setReducedMotion(restored.reducedMotion);
@@ -246,16 +295,19 @@ export default function App() {
         if (!silent) setToast(localizeError(preferenceError, "prefsLoadError"));
       }
       try {
-        const catalog = await fetchQuizCatalog(result.accessToken, i18n.language);
-        const metadata = new Map(categories.map((item) => [item.name, item]));
-        setAvailableCategories(catalog.categories.map((name, index) => metadata.get(name) ?? ({
-          name,
-          icon: "BrainCircuit",
-          color: ["violet", "blue", "cyan", "green", "pink", "amber", "indigo", "rose"][index % 8],
-          desc: t("approvedCategories"),
-        })));
-        setCategoryStages(catalog.progress ?? {});
-        setRandomStage(catalog.progress?.__random__ ?? 1);
+        const catalogRequestId = ++catalogRequestRef.current;
+        const catalog = await fetchQuizCatalog(result.accessToken, authenticatedQuizLocale);
+        if (catalogRequestId === catalogRequestRef.current) {
+          const metadata = new Map(categories.map((item) => [item.name, item]));
+          setAvailableCategories(catalog.categories.map((name, index) => metadata.get(name) ?? ({
+            name,
+            icon: "BrainCircuit",
+            color: ["violet", "blue", "cyan", "green", "pink", "amber", "indigo", "rose"][index % 8],
+            desc: t("approvedCategories"),
+          })));
+          setCategoryStages(catalog.progress ?? {});
+          setRandomStage(catalog.progress?.__random__ ?? 1);
+        }
       } catch (catalogError) {
         if (!silent) setToast(localizeError(catalogError, "catalogLoadError"));
         setAvailableCategories([]);
@@ -287,14 +339,18 @@ export default function App() {
   };
   useEffect(() => {
     const preferences: UserPreferences = {
-      language: i18n.language,
+      language: normalizeLocale(i18n.language),
+      quizLanguage,
       theme,
       soundEnabled: soundOn,
       reducedMotion,
     };
-    try { localStorage.setItem(PREFERENCES_CACHE_KEY, JSON.stringify(preferences)); }
+    if (piProfile && !preferencesHydrated) return;
+    try {
+      localStorage.setItem(preferencesCacheKey(piProfile?.pi_uid), JSON.stringify(preferences));
+    }
     catch { /* The in-memory settings remain usable if storage is unavailable. */ }
-  }, [i18n.language, theme, soundOn, reducedMotion]);
+  }, [i18n.language, quizLanguage, theme, soundOn, reducedMotion, piProfile?.pi_uid, preferencesHydrated]);
 
   useEffect(() => {
     const retryWhenOnline = () => setSyncRetry((value) => value + 1);
@@ -309,7 +365,8 @@ export default function App() {
       return;
     }
     const preferences: UserPreferences = {
-      language: i18n.language,
+      language: normalizeLocale(i18n.language),
+      quizLanguage,
       theme,
       soundEnabled: soundOn,
       reducedMotion,
@@ -329,6 +386,7 @@ export default function App() {
             preferencesVersionRef.current = latest.version;
             skipNextPreferenceSaveRef.current = true;
             await applyLocale(latest.preferences.language);
+            setQuizLanguage(normalizeLocale(latest.preferences.quizLanguage || latest.preferences.language));
             setTheme(themes.some((item) => item.id === latest.preferences.theme) ? latest.preferences.theme : "cosmic");
             setSoundOn(latest.preferences.soundEnabled);
             setReducedMotion(latest.preferences.reducedMotion);
@@ -342,7 +400,7 @@ export default function App() {
       }
     }, 650);
     return () => window.clearTimeout(timeout);
-  }, [piAccessToken, preferencesHydrated, syncRetry, i18n.language, theme, soundOn, reducedMotion]);
+  }, [piAccessToken, preferencesHydrated, syncRetry, i18n.language, quizLanguage, theme, soundOn, reducedMotion]);
 
   useEffect(() => {
     if (piRestoreAttempted.current) return;
@@ -357,6 +415,7 @@ export default function App() {
   }, []);
   const signOutPi = () => {
     try { localStorage.setItem("pi-brain-explicit-signout", "true"); } catch { /* Sign-out still applies in memory. */ }
+    catalogRequestRef.current += 1;
     setPiProfile(null);
     setPiAccessToken(null);
     preferencesReadyRef.current = false;
@@ -381,7 +440,7 @@ export default function App() {
     const pathKey = category || "__random__";
     if (piAccessToken) {
       try {
-        const remote = await startServerQuiz(piAccessToken, pathKey, i18n.language);
+        const remote = await startServerQuiz(piAccessToken, pathKey, quizLanguage);
         const firstQuestion = remote.questions[0];
         if (!firstQuestion) throw new Error(t("serverQuestionLoadError"));
         setSessionQuestions([mapServerQuestion(firstQuestion)]);
@@ -409,7 +468,7 @@ export default function App() {
     const list = pathKey !== "__random__"
       ? questions.filter((q) => q.category === pathKey)
       : [...questions].sort(() => Math.random() - 0.5);
-    const translatedList = list.filter((question) => hasQuestionTranslation(question.id, i18n.language));
+    const translatedList = list.filter((question) => hasQuestionTranslation(question.id, quizLanguage));
     if (!translatedList.length) { setToast(t("demoTranslationUnavailable")); return; }
     setSessionQuestions(translatedList);
     setRemoteSessionId(null);
@@ -519,8 +578,17 @@ export default function App() {
         </div>
         <button className={`icon-button sound-button ${soundOn ? "sound-on" : ""}`} onClick={toggleSound} aria-label={soundOn ? t("muteSound") : t("enableSound")} title={soundOn ? t("soundOn") : t("soundOff")}>{soundOn ? <Volume2 size={17}/> : <VolumeX size={17}/>}<span>{soundOn ? t("soundOn").toUpperCase() : t("soundOff").toUpperCase()}</span></button>
         <div className="language-wrap">
-          <button className="icon-button language-button" onClick={()=>setLanguageOpen(v=>!v)} aria-label={t("languages")} title={t("languages")} aria-expanded={languageOpen}><Languages size={17}/><span>{i18n.language.toUpperCase()}</span><ChevronDown size={14}/></button>
-          <AnimatePresence>{languageOpen&&<motion.div className="language-menu" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:8}}>{languageOptions.map(([code,label])=><button key={code} onClick={()=>changeLanguage(code)} className={i18n.language===code?"selected":""}>{label}{i18n.language===code&&<Check size={14}/>}</button>)}</motion.div>}</AnimatePresence>
+          <button className="icon-button language-button" onClick={()=>{setLanguageOpen(v=>!v);setThemeOpen(false)}} aria-label={t("languages")} title={`${t("languages")} / ${t("quizLanguage")}`} aria-expanded={languageOpen}><Languages size={17}/><span>{normalizeLocale(i18n.language).toUpperCase()} · Q:{quizLanguage.toUpperCase()}</span><ChevronDown size={14}/></button>
+          <AnimatePresence>{languageOpen&&<motion.div className="language-menu language-menu-expanded" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:8}}>
+            <div className="language-menu-tabs">
+              <button className={languageMenuTarget==="ui"?"active":""} onClick={()=>setLanguageMenuTarget("ui")}>{t("languages")}</button>
+              <button className={languageMenuTarget==="quiz"?"active":""} onClick={()=>setLanguageMenuTarget("quiz")}>{t("quizLanguage")}</button>
+            </div>
+            {localeOptions.map(([code,label])=>{
+              const selectedLanguage = languageMenuTarget === "ui" ? normalizeLocale(i18n.language) : quizLanguage;
+              return <button key={code} onClick={()=>void (languageMenuTarget === "ui" ? changeLanguage(code) : changeQuizLanguage(code))} className={selectedLanguage===code?"selected":""}>{label}{selectedLanguage===code&&<Check size={14}/>}</button>;
+            })}
+          </motion.div>}</AnimatePresence>
         </div>
         <button className="avatar" onClick={()=>setView("profile")} aria-label={t("openProfile")}>{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</button>
         <button className="mobile-menu-button" onClick={()=>setMobileMenu(v=>!v)} aria-label={mobileMenu ? t("closeMenu") : t("openMenu")} aria-expanded={mobileMenu}><Menu/></button>
@@ -546,7 +614,7 @@ export default function App() {
         <section className="section-block"><div className="section-heading"><div><div className="eyebrow">{t("findNextSpark")}</div><h3>{t("categories")}</h3></div><button className="text-button" onClick={()=>setView("discover")}>{t("seeAll")} <ChevronRight size={15}/></button></div>
           <div className="category-grid">{availableCategories.length === 0 ? <p className="muted">{t("questionBankEmpty")}</p> : availableCategories.slice(0,4).map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18,delay:i*.055}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div>
         </section>
-        <section className="bottom-grid"><div className="panel leaderboard-preview"><div className="section-heading"><div><div className="eyebrow">{t("thisWeek")}</div><h3>{t("leaderboard")}</h3></div><button className="text-button" onClick={()=>setView("rankings")}>{t("seeAll")} <ChevronRight size={15}/></button></div>{leaderboardRows.slice(0,3).map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b>{name}</b><span className="leader-points">{pts} XP</span></div>)}</div>
+        <section className="bottom-grid"><div className="panel leaderboard-preview"><div className="section-heading"><div><div className="eyebrow">{t("thisWeek")}</div><h3>{t("leaderboard")}</h3></div><button className="text-button" onClick={()=>setView("rankings")}>{t("seeAll")} <ChevronRight size={15}/></button></div>{leaderboardRows.slice(0,3).map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b dir="auto">{name}</b><span className="leader-points">{pts} XP</span></div>)}</div>
           <div className="panel progress-panel"><div className="eyebrow">{t("yourJourney")}</div><h3>{t("yourProgress")}</h3><div className="progress-ring"><div><strong>{stats.totalAnswered ? Math.round(stats.totalCorrect / stats.totalAnswered * 100) : 0}%</strong><small>{t("accuracy")}</small></div></div><p className="muted">{stats.totalAnswered ? t("progressSummary", { correct: stats.totalCorrect, total: stats.totalAnswered }) : t("firstAnswerProgress")}</p></div></section>
       </motion.div>}
 
@@ -554,8 +622,8 @@ export default function App() {
         <div className="quiz-top"><button className="back-button" onClick={()=>setView("home")}><ChevronLeft size={18}/>{t("back")}</button><span className="quiz-counter">{t("question")} {qIndex+1} {t("of")} {quizMeta?.questionCount ?? sessionQuestions.length}</span><button className="icon-button quiz-help" onClick={()=>setToast(remoteSessionId ? t("questionHelpServer") : t("questionHelpDemo"))}><CircleHelp size={18}/></button></div>
         <div className="quiz-stage-meta"><span>{t("stageNumber", { stage: quizMeta?.stage ?? 1 })}</span><span>{t("questionCount", { count: quizMeta?.questionCount ?? sessionQuestions.length })}</span><span>{quizMeta?.difficulty === "demo" ? t("demoMode") : localizeDifficulty((quizMeta?.difficulty ?? current.difficulty) as Question["difficulty"], i18n.language)}</span></div><div className="progress-track"><motion.div className="progress-fill" animate={{width:`${progress}%`}}/></div>
         <AnimatePresence mode="wait"><motion.div key={current.id} className="quiz-card" initial={{opacity:0,x:36,scale:.97,filter:"blur(6px)"}} animate={{opacity:1,x:0,scale:1,filter:"blur(0px)"}} exit={{opacity:0,x:-28,scale:.98,filter:"blur(5px)"}} transition={{type:"spring",stiffness:260,damping:24}}><div className="quiz-mascot-chip"><img src="/assets/pi-brain-robot.png" alt=""/><span>{t("readyWhen")}</span><Sparkles size={13}/></div><div className="quiz-tags"><span className="tag">{localizeCategory(current.category, i18n.language)}</span><span className="tag subtle">{localizeDifficulty(current.difficulty, i18n.language)}</span></div><div className="question-number">0{qIndex+1}</div><h2 dir="auto">{current.prompt}</h2><p className="muted">{t("choose")}</p>
-          <div className="answer-list">{current.options.map((option,i)=>{const correctIndex = remoteSessionId ? (remoteFeedback?.questionId===current.id ? remoteFeedback.answerIndex : -1) : current.answer; return <motion.button key={option} onClick={()=>chooseAnswer(i)} disabled={checked || answerSubmitting} className={`answer-option ${selected===i?"chosen":""} ${checked&&i===correctIndex?"right":""} ${checked&&selected===i&&i!==correctIndex?"wrong":""}`} whileTap={{scale:.975,x:3}} animate={{scale:selected===i?1.015:1}} transition={{type:"spring",stiffness:440,damping:23}}><span className="answer-letter">{String.fromCharCode(65+i)}</span><span dir="auto">{option}</span>{checked&&i===correctIndex&&<Check size={18}/>}</motion.button>})}</div>
-          <AnimatePresence>{checked&&<motion.div className={`feedback ${(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?"success":"try-again"}`} initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}}><b>{(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?t("correct"):t("incorrect")}</b>{(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)&&<div className="mini-celebration">✦ +15 XP <Sparkles size={13}/> {t("niceWork")}</div>}<p>{remoteSessionId ? remoteFeedback?.explanation : current.explanation}</p><span className="feedback-label"><Lightbulb size={14}/>{t("explanation")}</span></motion.div>}</AnimatePresence>
+          <div className="answer-list">{current.options.map((option,i)=>{const correctIndex = remoteSessionId ? (remoteFeedback?.questionId===current.id ? remoteFeedback.answerIndex : -1) : current.answer; return <motion.button key={option} onClick={()=>chooseAnswer(i)} disabled={checked || answerSubmitting} className={`answer-option ${selected===i?"chosen":""} ${checked&&i===correctIndex?"right":""} ${checked&&selected===i&&i!==correctIndex?"wrong":""}`} whileTap={{scale:.975,x:3}} animate={{scale:selected===i?1.015:1}} transition={{type:"spring",stiffness:440,damping:23}}><span className="answer-letter" dir="ltr">{String.fromCharCode(65+i)}</span><span dir="auto">{option}</span>{checked&&i===correctIndex&&<Check size={18}/>}</motion.button>})}</div>
+          <AnimatePresence>{checked&&<motion.div className={`feedback ${(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?"success":"try-again"}`} initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}}><b>{(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?t("correct"):t("incorrect")}</b>{(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)&&<div className="mini-celebration">✦ +15 XP <Sparkles size={13}/> {t("niceWork")}</div>}<p dir="auto">{remoteSessionId ? remoteFeedback?.explanation : current.explanation}</p><span className="feedback-label"><Lightbulb size={14}/>{t("explanation")}</span></motion.div>}</AnimatePresence>
           {!checked?<motion.button className="primary-button full" disabled={selected===null || answerSubmitting} onClick={checkAnswer} whileHover={{scale:1.015,y:-2}} whileTap={{scale:.96,y:2}} transition={{type:"spring",stiffness:420,damping:18}}>{answerSubmitting?t("savingAnswer"):t("check")}<ChevronRight size={17}/></motion.button>:<motion.button className="primary-button full" onClick={nextQuestion} disabled={questionLoading} whileHover={{scale:1.015,y:-2}} whileTap={{scale:.96,y:2}} transition={{type:"spring",stiffness:420,damping:18}}>{questionLoading ? t("loadingQuestion") : qIndex===(quizMeta?.questionCount ?? sessionQuestions.length)-1?t("finish"):t("next")}<ChevronRight size={17}/></motion.button>}
         </motion.div></AnimatePresence>
       </motion.div>}
@@ -564,9 +632,9 @@ export default function App() {
 
       {view==="discover"&&<motion.div key="discover" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("worldOfIdeas")}</div><h1>{t("categories")}</h1><p className="muted">{t("discoverLead")}</p><div className="category-grid discover-grid">{availableCategories.length === 0 && <p className="muted">{t("questionBankEmpty")}</p>}<motion.button className="category-card violet" onClick={()=>startQuiz()} whileHover={{y:-7,scale:1.025}} whileTap={{scale:.94}}><span className="category-icon"><Shuffle size={22}/></span><b>{t("randomQuestions")}</b><small>{t("approvedCategories")}</small><small>{t("stageNumber", { stage: randomStage })}</small><span className="category-arrow"><ChevronRight size={15}/></span></motion.button>{availableCategories.map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div></motion.div>}
 
-      {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("globalCommunity")}</div><h1>{t("leaderboard")}</h1><p className="muted">{t("communityLead")}</p><div className="panel ranking-panel">{leaderboardRows.length ? leaderboardRows.map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b>{name}</b><span className="leader-points">{pts} XP</span></div>) : <p className="muted">{t("noScores")}</p>}</div><p className="demo-note"><LockKeyhole size={14}/> {piProfile ? t("liveLeaderboard") : `${t("previewOnly")} — ${t("signInForLeaderboard")} `}</p></motion.div>}
+      {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("globalCommunity")}</div><h1>{t("leaderboard")}</h1><p className="muted">{t("communityLead")}</p><div className="panel ranking-panel">{leaderboardRows.length ? leaderboardRows.map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b dir="auto">{name}</b><span className="leader-points">{pts} XP</span></div>) : <p className="muted">{t("noScores")}</p>}</div><p className="demo-note"><LockKeyhole size={14}/> {piProfile ? t("liveLeaderboard") : `${t("previewOnly")} — ${t("signInForLeaderboard")} `}</p></motion.div>}
 
-      {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("yourSpace")}</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2>{piProfile?.username || t("guestExplorer")}</h2><span className="muted">{piProfile ? t("piIdentityVerified") : t("connectPiIdentity")}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> {t("verifiedWithPi")}</div>}<div className="profile-metrics"><div><b>{(piProfile?.total_xp ?? stats.totalXp).toLocaleString()}</b><small>XP</small></div><div><b>{piProfile?.day_streak ?? stats.dayStreak}</b><small>{t("dayStreakLabel")}</small></div><div><b>{piProfile?.total_answered ?? stats.totalAnswered}</b><small>{t("answeredLabel")}</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={() => signInWithPi()} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?t("connecting"):t("signInWithPi")}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?t("openPiBrowser"):t("backendSetup")}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> {t("piUidSaved")}</div><button className="text-button centered" onClick={() => signOutPi()}>{t("signOutSession")}</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div></motion.div>}
+      {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("yourSpace")}</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2 dir="auto">{piProfile?.username || t("guestExplorer")}</h2><span className="muted">{piProfile ? t("piIdentityVerified") : t("connectPiIdentity")}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> {t("verifiedWithPi")}</div>}<div className="profile-metrics"><div><b>{(piProfile?.total_xp ?? stats.totalXp).toLocaleString()}</b><small>XP</small></div><div><b>{piProfile?.day_streak ?? stats.dayStreak}</b><small>{t("dayStreakLabel")}</small></div><div><b>{piProfile?.total_answered ?? stats.totalAnswered}</b><small>{t("answeredLabel")}</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={() => signInWithPi()} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?t("connecting"):t("signInWithPi")}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?t("openPiBrowser"):t("backendSetup")}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> {t("piUidSaved")}</div><button className="text-button centered" onClick={() => signOutPi()}>{t("signOutSession")}</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div></motion.div>}
       </AnimatePresence>
     </main>
 

@@ -1,6 +1,7 @@
 import { bearerToken, handleOptions, json } from "../_shared/http.ts";
 import { verifyPiAccessToken } from "../_shared/pi.ts";
 import { getAdminClient } from "../_shared/supabase.ts";
+import { normalizeSupportedLocale } from "../_shared/locale.ts";
 
 Deno.serve(async (req) => {
   const early = handleOptions(req);
@@ -10,7 +11,7 @@ Deno.serve(async (req) => {
     if (!token) return json(req, { error: "Missing Pi access token." }, 401);
     const identity = await verifyPiAccessToken(token);
     const body = await req.json().catch(() => ({}));
-    const locale = typeof body.locale === "string" && /^[a-z]{2}(-[A-Z]{2})?$/.test(body.locale) ? body.locale : "en";
+    const locale = normalizeSupportedLocale(body.locale) ?? "en";
     const admin = getAdminClient();
     const profileFields = "id,pi_uid,username,display_name,locale,total_xp,total_answered,total_correct,day_streak,last_active_date";
     const { data: existing, error: lookupError } = await admin.from("profiles")

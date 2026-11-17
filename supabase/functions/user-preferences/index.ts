@@ -1,6 +1,7 @@
 import { bearerToken, handleOptions, json } from "../_shared/http.ts";
 import { verifyPiAccessToken } from "../_shared/pi.ts";
 import { getAdminClient } from "../_shared/supabase.ts";
+import { normalizeSupportedLocale } from "../_shared/locale.ts";
 
 const DEFAULTS = { theme: "cosmic", soundEnabled: true, reducedMotion: false };
 
@@ -22,10 +23,15 @@ Deno.serve(async (req) => {
       .select("preferences,version,updated_at").eq("profile_id", profile.id).maybeSingle();
     if (error) throw error;
 
+    const language = normalizeSupportedLocale(data?.preferences?.language ?? profile.locale) ?? "en";
+    const quizLanguage = normalizeSupportedLocale(
+      data?.preferences?.quizLanguage ?? data?.preferences?.language ?? profile.locale,
+    ) ?? language;
     const preferences = {
       ...DEFAULTS,
       ...(data?.preferences ?? {}),
-      language: data?.preferences?.language ?? profile.locale ?? "en",
+      language,
+      quizLanguage,
     };
     return json(req, {
       preferences,

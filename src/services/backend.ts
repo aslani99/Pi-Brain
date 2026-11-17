@@ -38,6 +38,8 @@ export type QuizSessionStart = {
   stage: number;
   question_count: number;
   difficulty: QuizDifficulty;
+  bank_status?: "BANK_AVAILABLE";
+  locale?: string;
   questions: ServerQuestion[];
 };
 
@@ -133,6 +135,7 @@ export function submitServerAnswer(
 
 export type UserPreferences = {
   language: string;
+  quizLanguage: string;
   theme: string;
   soundEnabled: boolean;
   reducedMotion: boolean;
