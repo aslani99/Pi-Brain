@@ -32,9 +32,23 @@ Deno.serve(async (req) => {
     });
     if (allocationError) {
       const message = allocationError.message || "Question allocation failed.";
+      if (message.includes("LOCALE_QUESTION_BANK_EMPTY")) {
+        return json(req, {
+          error: "No approved questions are available in the selected language.",
+          code: "LOCALE_QUESTION_BANK_EMPTY",
+          details: message,
+        }, 409);
+      }
+      if (message.includes("LOCALE_CATEGORY_UNAVAILABLE")) {
+        return json(req, {
+          error: "This category has no approved questions in the selected language.",
+          code: "LOCALE_CATEGORY_UNAVAILABLE",
+          details: message,
+        }, 404);
+      }
       if (message.includes("INSUFFICIENT_QUESTION_BANK")) {
         return json(req, {
-          error: "The approved question bank does not contain enough unseen questions for this stage and difficulty. Your stage has not changed. Add and approve more questions, then try again.",
+          error: "The selected language does not have enough unseen approved questions for this stage and difficulty. Your stage has not changed.",
           code: "INSUFFICIENT_QUESTION_BANK",
           details: message,
         }, 409);

@@ -71,7 +71,9 @@ async function invoke<T>(
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) {
     const message = typeof payload.error === "string" ? payload.error : `Backend request failed (${response.status}).`;
-    throw new Error(message);
+    const failure = new Error(message) as Error & { code?: string };
+    if (typeof payload.code === "string") failure.code = payload.code;
+    throw failure;
   }
   return payload as T;
 }
