@@ -443,7 +443,11 @@ export default function App() {
         const remote = await startServerQuiz(piAccessToken, pathKey, quizLanguage);
         const firstQuestion = remote.questions[0];
         if (!firstQuestion) throw new Error(t("serverQuestionLoadError"));
-        setSessionQuestions([mapServerQuestion(firstQuestion)]);
+        const resumedQuestion = mapServerQuestion(firstQuestion);
+        const resumedIndex = Math.max(0, remote.current_index ?? 0);
+        // Keep the current server question at its absolute session index so
+        // the existing next-question flow continues from the resumed position.
+        setSessionQuestions(Array.from({ length: resumedIndex + 1 }, () => resumedQuestion));
         setRemoteSessionId(remote.session_id);
         setQuizMeta({
           pathKey: remote.path_key,
@@ -452,10 +456,10 @@ export default function App() {
           difficulty: remote.difficulty.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
         });
         setRemoteFeedback(null);
-        setQIndex(0);
+        setQIndex(resumedIndex);
         setSelected(null);
         setChecked(false);
-        setScore(0);
+        setScore(remote.score ?? 0);
         setView("quiz");
         return;
       } catch (error) {

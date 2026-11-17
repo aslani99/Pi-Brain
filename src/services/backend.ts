@@ -40,6 +40,9 @@ export type QuizSessionStart = {
   difficulty: QuizDifficulty;
   bank_status?: "BANK_AVAILABLE";
   locale?: string;
+  current_index: number;
+  score: number;
+  resumed: boolean;
   questions: ServerQuestion[];
 };
 

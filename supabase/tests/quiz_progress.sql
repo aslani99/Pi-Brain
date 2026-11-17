@@ -12,6 +12,7 @@ declare
   v_session uuid;
   v_first_seen uuid;
   v_new_first uuid;
+  v_original_session uuid;
   v_stage integer;
   v_count integer;
   v_i integer;
@@ -80,27 +81,51 @@ begin
   where profile_id = v_profile and path_key = 'Test Topic';
   if v_stage <> 2 then raise exception 'Completed category path did not advance exactly once'; end if;
 
-  -- Start random path, display one question, then abandon it by starting again.
-  -- The displayed question remains globally seen; the other reservations are freed.
+  -- Leaving a quiz and starting the same path resumes the same session.
+  -- The current question and score are preserved; history is not duplicated.
   v_alloc := public.allocate_unseen_quiz(v_profile, 'en', '__random__');
-  v_session := (v_alloc->>'session_id')::uuid;
-  v_delivery := public.deliver_quiz_question(v_profile, v_session);
+  v_original_session := (v_alloc->>'session_id')::uuid;
+  v_delivery := public.deliver_quiz_question(v_profile, v_original_session);
   v_first_seen := (v_delivery->>'question_id')::uuid;
 
   v_alloc := public.allocate_unseen_quiz(v_profile, 'en', '__random__');
   v_session := (v_alloc->>'session_id')::uuid;
   v_new_first := (v_alloc->'question_ids'->>0)::uuid;
-  if v_first_seen = v_new_first then raise exception 'A displayed question was selected again on another path'; end if;
+  if v_session <> v_original_session
+    or v_alloc->>'resumed' <> 'true'
+    or (v_alloc->>'current_index')::integer <> 0
+    or v_new_first <> v_first_seen then
+    raise exception 'An unfinished quiz was not resumed at its original position';
+  end if;
+
+  v_delivery := public.deliver_quiz_question(v_profile, v_session);
+  if (v_delivery->>'question_id')::uuid <> v_first_seen then
+    raise exception 'Resuming did not return the same current question';
+  end if;
 
   select count(*) into v_count
   from public.question_seen_history
   where profile_id = v_profile and question_id = v_first_seen;
-  if v_count <> 1 then raise exception 'Global seen history did not retain the abandoned question'; end if;
+  if v_count <> 1 then raise exception 'Resuming duplicated or lost the displayed-question history'; end if;
 
   select current_stage into v_stage
   from public.quiz_progress
   where profile_id = v_profile and path_key = '__random__';
-  if v_stage <> 1 then raise exception 'Abandoning a random quiz incorrectly advanced its stage'; end if;
+  if v_stage <> 1 then raise exception 'Resuming a random quiz incorrectly advanced its stage'; end if;
+
+  -- After one submitted answer, resume at the next question with the saved score.
+  v_answer := public.record_quiz_answer(v_profile, v_session, v_first_seen, 0);
+  v_alloc := public.allocate_unseen_quiz(v_profile, 'en', '__random__');
+  if v_alloc->>'resumed' <> 'true'
+    or (v_alloc->>'current_index')::integer <> 1
+    or (v_alloc->>'score')::integer <> 1 then
+    raise exception 'Resuming did not preserve the answered position and score';
+  end if;
+  v_session := (v_alloc->>'session_id')::uuid;
+  v_delivery := public.deliver_quiz_question(v_profile, v_session);
+  if (v_delivery->>'question_id')::uuid = v_first_seen then
+    raise exception 'Resuming after an answer did not advance to the next question';
+  end if;
 
   -- The category path remains at its own second stage, with the correct count.
   v_alloc := public.allocate_unseen_quiz(v_profile, 'en', 'Test Topic');

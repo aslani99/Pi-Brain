@@ -93,6 +93,9 @@ Deno.serve(async (req) => {
       difficulty: allocation.difficulty,
       bank_status: "BANK_AVAILABLE",
       locale,
+      current_index: Number.isInteger(allocation.current_index) ? allocation.current_index : 0,
+      score: Number.isInteger(allocation.score) ? allocation.score : 0,
+      resumed: allocation.resumed === true,
       questions: [firstQuestion],
     });
   } catch (error) {
