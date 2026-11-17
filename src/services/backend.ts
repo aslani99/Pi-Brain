@@ -127,3 +127,32 @@ export function submitServerAnswer(
     selected_index: selectedIndex,
   });
 }
+
+
+export type UserPreferences = {
+  language: string;
+  theme: string;
+  soundEnabled: boolean;
+  reducedMotion: boolean;
+};
+
+export type UserPreferencesResult = {
+  preferences: UserPreferences;
+  version: number;
+  updated_at: string | null;
+};
+
+export function fetchUserPreferences(accessToken: string) {
+  return invoke<UserPreferencesResult>("user-preferences", accessToken, {});
+}
+
+export function saveUserPreferences(
+  accessToken: string,
+  preferences: UserPreferences,
+  expectedVersion: number,
+) {
+  return invoke<UserPreferencesResult>("save-user-preferences", accessToken, {
+    preferences,
+    expected_version: expectedVersion,
+  });
+}

@@ -1,12 +1,12 @@
-import { useState, type PointerEvent as ReactPointerEvent } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { Activity, Atom, Award, BrainCircuit, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Cpu, Flame, Globe2, Home, Languages, Leaf, Lightbulb, LockKeyhole, Menu, Palette, Play, Sparkles, Star, Trophy, UserRound, X, Orbit, Shapes, Volume2, VolumeX, Sun, CheckCircle2, Shuffle } from "lucide-react";
 import { applyLocale } from "./i18n/config";
 import { categories, questions, type Question } from "./data";
 import { playUiSound, startAmbientMusic, stopAmbientMusic } from "./audio";
-import { authenticatePiUser } from "./services/pi";
-import { fetchLeaderboard, fetchNextServerQuestion, fetchQuizCatalog, isBackendConfigured, startServerQuiz, submitServerAnswer, type LeaderboardEntry, type PiVerifiedProfile, type ServerQuestion } from "./services/backend";
+import { authenticatePiUser, isPiSdkAvailable } from "./services/pi";
+import { fetchLeaderboard, fetchNextServerQuestion, fetchQuizCatalog, isBackendConfigured, startServerQuiz, submitServerAnswer, type LeaderboardEntry, type PiVerifiedProfile, type ServerQuestion, type UserPreferences, fetchUserPreferences, saveUserPreferences } from "./services/backend";
 
 const iconMap: Record<string, any> = { Atom, Globe2, Cpu, Leaf, BrainCircuit, Palette, Orbit, Shapes, Shuffle };
 const themes = [
@@ -19,8 +19,8 @@ const themes = [
   { id: "rose", name: "Rose", fa: "رز", colors: ["#2a1024", "#d85b9b", "#ff9cc9", "#ffd2a1"], mode: "dark" }
 ];
 const languageOptions = [
-  ["en","English"],["fa","فارسی"],["ar","العربية"],["es","Español"],["fr","Français"],
-  ["de","Deutsch"],["pt","Português"],["hi","हिन्दी"],["zh","中文"],["ja","日本語"],["ru","Русский"]
+  ["en","English"],["fa","فارسی"],["ar","العربية"],["de","Deutsch"],["es","Español"],
+  ["fr","Français"],["ru","Русский"],["tr","Türkçe"],["hi","हिन्दी"],["zh","中文"],["ja","日本語"],["pt","Português"]
 ];
 
 type LocalStats = {
@@ -89,6 +89,36 @@ function readLocalStats(): LocalStats {
   }
 }
 
+const PREFERENCES_CACHE_KEY = "pi-brain-preferences-v1";
+const DEFAULT_PREFERENCES: UserPreferences = {
+  language: "en",
+  theme: "cosmic",
+  soundEnabled: true,
+  reducedMotion: false,
+};
+
+function readLocalPreferences(): UserPreferences {
+  try {
+    const raw = localStorage.getItem(PREFERENCES_CACHE_KEY);
+    if (!raw) {
+      const legacyTheme = localStorage.getItem("pi-brain-theme");
+      return {
+        ...DEFAULT_PREFERENCES,
+        theme: themes.some((item) => item.id === legacyTheme) ? legacyTheme! : "cosmic",
+      };
+    }
+    const value = JSON.parse(raw) as Partial<UserPreferences>;
+    return {
+      language: typeof value.language === "string" ? value.language : "en",
+      theme: themes.some((item) => item.id === value.theme) ? value.theme! : "cosmic",
+      soundEnabled: typeof value.soundEnabled === "boolean" ? value.soundEnabled : true,
+      reducedMotion: typeof value.reducedMotion === "boolean" ? value.reducedMotion : false,
+    };
+  } catch {
+    return DEFAULT_PREFERENCES;
+  }
+}
+
 export default function App() {
   const { t, i18n } = useTranslation();
   const [view, setView] = useState<"home"|"quiz"|"result"|"rankings"|"discover"|"profile">("home");
@@ -104,22 +134,22 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
-  const [theme, setTheme] = useState(() => {
-    try {
-      const saved = localStorage.getItem("pi-brain-theme");
-      return themes.some(item => item.id === saved) ? saved! : "cosmic";
-    } catch {
-      return "cosmic";
-    }
-  });
+  const [theme, setTheme] = useState(() => readLocalPreferences().theme);
+  const [reducedMotion, setReducedMotion] = useState(() => readLocalPreferences().reducedMotion);
+  const [preferencesHydrated, setPreferencesHydrated] = useState(false);
+  const [syncRetry, setSyncRetry] = useState(0);
+  const preferencesVersionRef = useRef(0);
+  const preferencesReadyRef = useRef(false);
+  const skipNextPreferenceSaveRef = useRef(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [toast, setToast] = useState("");
-  const [soundOn, setSoundOn] = useState(true);
+  const [soundOn, setSoundOn] = useState(() => readLocalPreferences().soundEnabled);
   const [stats, setStats] = useState<LocalStats>(readLocalStats);
   const [piProfile, setPiProfile] = useState<PiVerifiedProfile | null>(null);
   const [piAccessToken, setPiAccessToken] = useState<string | null>(null);
   const [piAuthBusy, setPiAuthBusy] = useState(false);
   const [piAuthMessage, setPiAuthMessage] = useState("");
+  const piRestoreAttempted = useRef(false);
   const [remoteSessionId, setRemoteSessionId] = useState<string | null>(null);
   const [remoteFeedback, setRemoteFeedback] = useState<{ questionId: string; correct: boolean; answerIndex: number; explanation: string } | null>(null);
   const [answerSubmitting, setAnswerSubmitting] = useState(false);
@@ -134,11 +164,11 @@ export default function App() {
     ? liveLeaderboard.map((entry) => [String(entry.rank), entry.username, entry.total_xp.toLocaleString()])
     : [["1","NovaMind","2,840"],["2","CuriousCat","2,610"],["3","You","2,420"],["4","OrbitFox","2,180"],["5","BlueComet","1,940"]];
 
-  const changeLanguage = (code:string) => {
-    applyLocale(code);
+  const changeLanguage = async (code:string) => {
+    const language = await applyLocale(code);
     setLanguageOpen(false);
     if (piAccessToken) {
-      void fetchQuizCatalog(piAccessToken, code).then((catalog) => {
+      void fetchQuizCatalog(piAccessToken, language).then((catalog) => {
         const metadata = new Map(categories.map((item) => [item.name, item]));
         setAvailableCategories(catalog.categories.map((name, index) => metadata.get(name) ?? ({
           name, icon: "BrainCircuit",
@@ -150,18 +180,40 @@ export default function App() {
       }).catch((error) => setToast(error instanceof Error ? error.message : "Could not refresh quiz categories."));
     }
   };
-  const signInWithPi = async () => {
+  const signInWithPi = async (silent = false) => {
     if (!isBackendConfigured()) {
-      setPiAuthMessage("برای ورود واقعی، ابتدا آدرس پروژه و کلید عمومی Supabase را در فایل .env.local قرار بده.");
+      if (!silent) setPiAuthMessage("برای ورود واقعی، ابتدا آدرس پروژه و کلید عمومی Supabase را در فایل .env.local قرار بده.");
       return;
     }
+    if (!silent) {
+      try { localStorage.removeItem("pi-brain-explicit-signout"); } catch { /* Storage may be unavailable. */ }
+    }
     setPiAuthBusy(true);
-    setPiAuthMessage("");
+    if (!silent) setPiAuthMessage("");
     try {
       const result = await authenticatePiUser(i18n.language);
       setPiProfile(result.profile);
-      // Kept in memory only. The Pi access token is deliberately not written to localStorage.
+      // Keep the Pi access token in memory only; never persist it in localStorage.
       setPiAccessToken(result.accessToken);
+      try {
+        const remotePreferences = await fetchUserPreferences(result.accessToken);
+        const localPreferences = readLocalPreferences();
+        const restored = remotePreferences.version === 0
+          ? { ...localPreferences, language: result.profile.locale || i18n.language }
+          : remotePreferences.preferences;
+        preferencesVersionRef.current = remotePreferences.version;
+        preferencesReadyRef.current = true;
+        skipNextPreferenceSaveRef.current = remotePreferences.version > 0;
+        await applyLocale(restored.language);
+        setTheme(themes.some((item) => item.id === restored.theme) ? restored.theme : "cosmic");
+        setSoundOn(restored.soundEnabled);
+        setReducedMotion(restored.reducedMotion);
+        setPreferencesHydrated(true);
+      } catch (preferenceError) {
+        preferencesReadyRef.current = false;
+        setPreferencesHydrated(false);
+        if (!silent) setToast(preferenceError instanceof Error ? preferenceError.message : "Could not load account preferences.");
+      }
       try {
         const catalog = await fetchQuizCatalog(result.accessToken, i18n.language);
         const metadata = new Map(categories.map((item) => [item.name, item]));
@@ -174,7 +226,7 @@ export default function App() {
         setCategoryStages(catalog.progress ?? {});
         setRandomStage(catalog.progress?.__random__ ?? 1);
       } catch (catalogError) {
-        setToast(catalogError instanceof Error ? catalogError.message : "Could not load quiz categories.");
+        if (!silent) setToast(catalogError instanceof Error ? catalogError.message : "Could not load quiz categories.");
         setAvailableCategories(categories);
       }
       try {
@@ -188,19 +240,97 @@ export default function App() {
         dayStreak: result.profile.day_streak,
         lastPlayedDate: result.profile.last_active_date,
       });
-      setPiAuthMessage("هویت شما با موفقیت از طریق Pi Network تأیید شد.");
-      if (soundOn) playUiSound("success");
+      if (!silent) {
+        setPiAuthMessage("هویت شما با موفقیت از طریق Pi Network تأیید شد.");
+        if (soundOn) playUiSound("success");
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "ورود با Pi انجام نشد.";
-      setPiAuthMessage(message);
-      setToast(message);
+      if (!silent) {
+        setPiAuthMessage(message);
+        setToast(message);
+      }
     } finally {
       setPiAuthBusy(false);
     }
   };
+  useEffect(() => {
+    const preferences: UserPreferences = {
+      language: i18n.language,
+      theme,
+      soundEnabled: soundOn,
+      reducedMotion,
+    };
+    try { localStorage.setItem(PREFERENCES_CACHE_KEY, JSON.stringify(preferences)); }
+    catch { /* The in-memory settings remain usable if storage is unavailable. */ }
+  }, [i18n.language, theme, soundOn, reducedMotion]);
+
+  useEffect(() => {
+    const retryWhenOnline = () => setSyncRetry((value) => value + 1);
+    window.addEventListener("online", retryWhenOnline);
+    return () => window.removeEventListener("online", retryWhenOnline);
+  }, []);
+
+  useEffect(() => {
+    if (!piAccessToken || !preferencesReadyRef.current || !preferencesHydrated) return;
+    if (skipNextPreferenceSaveRef.current) {
+      skipNextPreferenceSaveRef.current = false;
+      return;
+    }
+    const preferences: UserPreferences = {
+      language: i18n.language,
+      theme,
+      soundEnabled: soundOn,
+      reducedMotion,
+    };
+    const timeout = window.setTimeout(async () => {
+      try {
+        const saved = await saveUserPreferences(
+          piAccessToken,
+          preferences,
+          preferencesVersionRef.current,
+        );
+        preferencesVersionRef.current = saved.version;
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("another device")) {
+          try {
+            const latest = await fetchUserPreferences(piAccessToken);
+            preferencesVersionRef.current = latest.version;
+            skipNextPreferenceSaveRef.current = true;
+            await applyLocale(latest.preferences.language);
+            setTheme(themes.some((item) => item.id === latest.preferences.theme) ? latest.preferences.theme : "cosmic");
+            setSoundOn(latest.preferences.soundEnabled);
+            setReducedMotion(latest.preferences.reducedMotion);
+            setToast("Your settings were updated on another device. The latest version has been restored.");
+          } catch {
+            setToast("Could not synchronize settings. Your local changes are still available on this device.");
+          }
+        } else {
+          setToast(error instanceof Error ? error.message : "Could not synchronize account preferences.");
+        }
+      }
+    }, 650);
+    return () => window.clearTimeout(timeout);
+  }, [piAccessToken, preferencesHydrated, syncRetry, i18n.language, theme, soundOn, reducedMotion]);
+
+  useEffect(() => {
+    if (piRestoreAttempted.current) return;
+    piRestoreAttempted.current = true;
+
+    let explicitlySignedOut = false;
+    try { explicitlySignedOut = localStorage.getItem("pi-brain-explicit-signout") === "true"; } catch { /* Continue with SDK restoration. */ }
+
+    if (!explicitlySignedOut && isPiSdkAvailable() && isBackendConfigured()) {
+      void signInWithPi(true);
+    }
+  }, []);
   const signOutPi = () => {
+    try { localStorage.setItem("pi-brain-explicit-signout", "true"); } catch { /* Sign-out still applies in memory. */ }
     setPiProfile(null);
     setPiAccessToken(null);
+    preferencesReadyRef.current = false;
+    setPreferencesHydrated(false);
+    preferencesVersionRef.current = 0;
     setAvailableCategories(categories);
     setCategoryStages({});
     setRandomStage(1);
@@ -212,7 +342,6 @@ export default function App() {
   };
   const changeTheme = (id:string) => {
     setTheme(id);
-    try { localStorage.setItem("pi-brain-theme", id); } catch { /* Theme still applies for this session. */ }
     setThemeOpen(false);
     if (soundOn) playUiSound("select");
   };
@@ -348,7 +477,7 @@ export default function App() {
     setRemoteFeedback(null);
   };
 
-  return <div className="app-shell" data-theme={theme} onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => { const target = event.target as HTMLElement; if (soundOn && target.closest("button")) { startAmbientMusic(); playUiSound("tap"); } }}>
+  return <MotionConfig reducedMotion={reducedMotion ? "always" : "user"}><div className="app-shell" data-theme={theme} data-reduced-motion={reducedMotion ? "true" : "false"} onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => { const target = event.target as HTMLElement; if (soundOn && target.closest("button")) { startAmbientMusic(); playUiSound("tap"); } }}>
     <header className="topbar">
       <button className="brand" onClick={()=>setView("home")} aria-label="Pi Brain home">
         <span className="brand-mark"><Orbit size={22}/></span><span>pi<span className="brand-accent">brain</span></span><span className="brand-beta">COSMIC QUIZ</span>
@@ -356,15 +485,15 @@ export default function App() {
       <nav className="desktop-nav">{navItems.map(n=><motion.button key={n.id} className={view===n.id?"nav-link active":"nav-link"} onClick={()=>setView(n.id)} whileTap={{scale:.9}} transition={{type:"spring",stiffness:500,damping:20}}><n.icon size={17}/>{n.label}</motion.button>)}</nav>
       <div className="top-actions">
         <div className="theme-wrap">
-          <motion.button className="icon-button theme-button" onClick={()=>{setThemeOpen(v=>!v);setLanguageOpen(false)}} whileTap={{scale:.86,rotate:18}} aria-label={i18n.language === "fa" ? "انتخاب تم رنگی" : "Choose color theme"} aria-expanded={themeOpen} title={i18n.language === "fa" ? "انتخاب تم" : "Choose theme"}><Palette size={17}/><span>{i18n.language === "fa" ? "تم‌ها" : "THEMES"}</span></motion.button>
-          <AnimatePresence>{themeOpen&&<motion.div className="theme-menu" initial={{opacity:0,y:12,scale:.94,filter:"blur(5px)"}} animate={{opacity:1,y:0,scale:1,filter:"blur(0px)"}} exit={{opacity:0,y:8,scale:.96}} transition={{type:"spring",stiffness:420,damping:25}}><div className="theme-menu-head"><div><b>{i18n.language === "fa" ? "جهان رنگی خودت را انتخاب کن" : "Choose your universe"}</b><small>{i18n.language === "fa" ? "ظاهر Pi Brain را شخصی‌سازی کن" : "Make Pi Brain yours"}</small></div><button className="theme-close" onClick={()=>setThemeOpen(false)} aria-label="Close themes"><X size={15}/></button></div><div className="theme-options">{themes.map((item,i)=><motion.button key={item.id} className={`theme-option ${theme===item.id?"active":""}`} onClick={()=>changeTheme(item.id)} whileHover={{x:4,scale:1.015}} whileTap={{scale:.96}} initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} transition={{delay:i*.035}}><span className="theme-swatches">{item.colors.map((color,j)=><i key={j} style={{background:color}}/>)}</span><span className="theme-name"><b>{i18n.language==="fa"?item.fa:item.name}</b><small>{item.mode==="light"?"Light mode":"Dark mode"}</small></span>{theme===item.id&&<CheckCircle2 size={17}/>}</motion.button>)}</div><div className="theme-tip"><Sun size={13}/> {i18n.language === "fa" ? "تم روشن برای محیط‌های پرنور طراحی شده است" : "Light theme is designed for bright environments"}</div></motion.div>}</AnimatePresence>
+          <motion.button className="icon-button theme-button" onClick={()=>{setThemeOpen(v=>!v);setLanguageOpen(false)}} whileTap={{scale:.86,rotate:18}} aria-label={t("chooseTheme")} aria-expanded={themeOpen} title={t("chooseTheme")}><Palette size={17}/><span>{t("themes").toUpperCase()}</span></motion.button>
+          <AnimatePresence>{themeOpen&&<motion.div className="theme-menu" initial={{opacity:0,y:12,scale:.94,filter:"blur(5px)"}} animate={{opacity:1,y:0,scale:1,filter:"blur(0px)"}} exit={{opacity:0,y:8,scale:.96}} transition={{type:"spring",stiffness:420,damping:25}}><div className="theme-menu-head"><div><b>{t("chooseUniverse")}</b><small>{t("personalizeAppearance")}</small></div><button className="theme-close" onClick={()=>setThemeOpen(false)} aria-label={t("close")}><X size={15}/></button></div><div className="theme-options">{themes.map((item,i)=><motion.button key={item.id} className={`theme-option ${theme===item.id?"active":""}`} onClick={()=>changeTheme(item.id)} whileHover={{x:4,scale:1.015}} whileTap={{scale:.96}} initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} transition={{delay:i*.035}}><span className="theme-swatches">{item.colors.map((color,j)=><i key={j} style={{background:color}}/>)}</span><span className="theme-name"><b>{i18n.language==="fa"?item.fa:item.name}</b><small>{item.mode==="light"?t("lightMode"):t("darkMode")}</small></span>{theme===item.id&&<CheckCircle2 size={17}/>}</motion.button>)}</div><div className="theme-tip"><Sun size={13}/> {t("lightThemeTip")}</div><button className="theme-motion-toggle" onClick={()=>setReducedMotion(value=>!value)} aria-pressed={reducedMotion}>{t("reduceMotion")}<span>{reducedMotion ? t("on") : t("off")}</span></button></motion.div>}</AnimatePresence>
         </div>
-        <button className={`icon-button sound-button ${soundOn ? "sound-on" : ""}`} onClick={toggleSound} aria-label={soundOn ? "Mute music and sound effects" : "Enable music and sound effects"} title={soundOn ? "Sound on" : "Sound off"}>{soundOn ? <Volume2 size={17}/> : <VolumeX size={17}/>}<span>{soundOn ? "SOUND ON" : "SOUND OFF"}</span></button>
+        <button className={`icon-button sound-button ${soundOn ? "sound-on" : ""}`} onClick={toggleSound} aria-label={soundOn ? t("muteSound") : t("enableSound")} title={soundOn ? t("soundOn") : t("soundOff")}>{soundOn ? <Volume2 size={17}/> : <VolumeX size={17}/>}<span>{soundOn ? t("soundOn").toUpperCase() : t("soundOff").toUpperCase()}</span></button>
         <div className="language-wrap">
           <button className="icon-button language-button" onClick={()=>setLanguageOpen(v=>!v)}><Languages size={17}/><span>{i18n.language.toUpperCase()}</span><ChevronDown size={14}/></button>
           <AnimatePresence>{languageOpen&&<motion.div className="language-menu" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:8}}>{languageOptions.map(([code,label])=><button key={code} onClick={()=>changeLanguage(code)} className={i18n.language===code?"selected":""}>{label}{i18n.language===code&&<Check size={14}/>}</button>)}</motion.div>}</AnimatePresence>
         </div>
-        <button className="avatar" onClick={()=>setView("profile")} aria-label="Open profile">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</button>
+        <button className="avatar" onClick={()=>setView("profile")} aria-label={t("openProfile")}>{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</button>
         <button className="mobile-menu-button" onClick={()=>setMobileMenu(v=>!v)}><Menu/></button>
       </div>
     </header>
@@ -395,8 +524,8 @@ export default function App() {
       {view==="quiz"&&<motion.div key="quiz" className="quiz-page" initial={{opacity:0,scale:.965,y:28,filter:"blur(8px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} exit={{opacity:0,scale:.985,y:-18,filter:"blur(6px)"}} transition={{type:"spring",stiffness:250,damping:25}}>
         <div className="quiz-top"><button className="back-button" onClick={()=>setView("home")}><ChevronLeft size={18}/>{t("back")}</button><span className="quiz-counter">{t("question")} {qIndex+1} {t("of")} {quizMeta?.questionCount ?? sessionQuestions.length}</span><button className="icon-button quiz-help" onClick={()=>setToast(remoteSessionId ? "Your current stage advances only after every question is answered." : "Your progress is saved in this demo session.")}><CircleHelp size={18}/></button></div>
         <div className="quiz-stage-meta"><span>Stage {quizMeta?.stage ?? 1}</span><span>{quizMeta?.questionCount ?? sessionQuestions.length} questions</span><span>{quizMeta?.difficulty ?? current.difficulty}</span></div><div className="progress-track"><motion.div className="progress-fill" animate={{width:`${progress}%`}}/></div>
-        <AnimatePresence mode="wait"><motion.div key={current.id} className="quiz-card" initial={{opacity:0,x:36,scale:.97,filter:"blur(6px)"}} animate={{opacity:1,x:0,scale:1,filter:"blur(0px)"}} exit={{opacity:0,x:-28,scale:.98,filter:"blur(5px)"}} transition={{type:"spring",stiffness:260,damping:24}}><div className="quiz-mascot-chip"><img src="/assets/pi-brain-robot.png" alt=""/><span>Ready when you are!</span><Sparkles size={13}/></div><div className="quiz-tags"><span className="tag">{current.category}</span><span className="tag subtle">{current.difficulty}</span></div><div className="question-number">0{qIndex+1}</div><h2>{current.prompt}</h2><p className="muted">{t("choose")}</p>
-          <div className="answer-list">{current.options.map((option,i)=>{const correctIndex = remoteSessionId ? (remoteFeedback?.questionId===current.id ? remoteFeedback.answerIndex : -1) : current.answer; return <motion.button key={option} onClick={()=>chooseAnswer(i)} disabled={checked || answerSubmitting} className={`answer-option ${selected===i?"chosen":""} ${checked&&i===correctIndex?"right":""} ${checked&&selected===i&&i!==correctIndex?"wrong":""}`} whileTap={{scale:.975,x:3}} animate={{scale:selected===i?1.015:1}} transition={{type:"spring",stiffness:440,damping:23}}><span className="answer-letter">{String.fromCharCode(65+i)}</span><span>{option}</span>{checked&&i===correctIndex&&<Check size={18}/>}</motion.button>})}</div>
+        <AnimatePresence mode="wait"><motion.div key={current.id} className="quiz-card" initial={{opacity:0,x:36,scale:.97,filter:"blur(6px)"}} animate={{opacity:1,x:0,scale:1,filter:"blur(0px)"}} exit={{opacity:0,x:-28,scale:.98,filter:"blur(5px)"}} transition={{type:"spring",stiffness:260,damping:24}}><div className="quiz-mascot-chip"><img src="/assets/pi-brain-robot.png" alt=""/><span>Ready when you are!</span><Sparkles size={13}/></div><div className="quiz-tags"><span className="tag">{current.category}</span><span className="tag subtle">{current.difficulty}</span></div><div className="question-number">0{qIndex+1}</div><h2 dir="auto">{current.prompt}</h2><p className="muted">{t("choose")}</p>
+          <div className="answer-list">{current.options.map((option,i)=>{const correctIndex = remoteSessionId ? (remoteFeedback?.questionId===current.id ? remoteFeedback.answerIndex : -1) : current.answer; return <motion.button key={option} onClick={()=>chooseAnswer(i)} disabled={checked || answerSubmitting} className={`answer-option ${selected===i?"chosen":""} ${checked&&i===correctIndex?"right":""} ${checked&&selected===i&&i!==correctIndex?"wrong":""}`} whileTap={{scale:.975,x:3}} animate={{scale:selected===i?1.015:1}} transition={{type:"spring",stiffness:440,damping:23}}><span className="answer-letter">{String.fromCharCode(65+i)}</span><span dir="auto">{option}</span>{checked&&i===correctIndex&&<Check size={18}/>}</motion.button>})}</div>
           <AnimatePresence>{checked&&<motion.div className={`feedback ${(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?"success":"try-again"}`} initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}}><b>{(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?t("correct"):t("incorrect")}</b>{(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)&&<div className="mini-celebration">✦ +15 XP <Sparkles size={13}/> NICE WORK!</div>}<p>{remoteSessionId ? remoteFeedback?.explanation : current.explanation}</p><span className="feedback-label"><Lightbulb size={14}/>{t("explanation")}</span></motion.div>}</AnimatePresence>
           {!checked?<motion.button className="primary-button full" disabled={selected===null || answerSubmitting} onClick={checkAnswer} whileHover={{scale:1.015,y:-2}} whileTap={{scale:.96,y:2}} transition={{type:"spring",stiffness:420,damping:18}}>{answerSubmitting?"Saving answer…":t("check")}<ChevronRight size={17}/></motion.button>:<motion.button className="primary-button full" onClick={nextQuestion} disabled={questionLoading} whileHover={{scale:1.015,y:-2}} whileTap={{scale:.96,y:2}} transition={{type:"spring",stiffness:420,damping:18}}>{questionLoading ? "Loading question…" : qIndex===(quizMeta?.questionCount ?? sessionQuestions.length)-1?t("finish"):t("next")}<ChevronRight size={17}/></motion.button>}
         </motion.div></AnimatePresence>
@@ -408,12 +537,12 @@ export default function App() {
 
       {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">THE GLOBAL COMMUNITY</div><h1>{t("leaderboard")}</h1><p className="muted">A friendly celebration of daily curiosity.</p><div className="panel ranking-panel">{leaderboardRows.length ? leaderboardRows.map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b>{name}</b><span className="leader-points">{pts} XP</span></div>) : <p className="muted">No Pioneer scores have been recorded yet. Complete a server quiz to appear here.</p>}</div><p className="demo-note"><LockKeyhole size={14}/> {piProfile ? "Live Supabase leaderboard for verified Pi users." : "Preview data only — sign in with Pi to load the live global leaderboard."}</p></motion.div>}
 
-      {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">YOUR SPACE</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2>{piProfile?.username || "Guest Explorer"}</h2><span className="muted">{piProfile ? "Pi Network identity verified" : "Connect your Pi identity to create your global Pioneer profile."}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> VERIFIED WITH PI NETWORK</div>}<div className="profile-metrics"><div><b>{(piProfile?.total_xp ?? stats.totalXp).toLocaleString()}</b><small>XP</small></div><div><b>{piProfile?.day_streak ?? stats.dayStreak}</b><small>Day streak</small></div><div><b>{piProfile?.total_answered ?? stats.totalAnswered}</b><small>Answered</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={signInWithPi} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?"Connecting to Pi…":"Sign in with Pi Network"}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?"For the real sign-in flow, open this app in Pi Browser or Pi Sandbox.":"Backend setup required: add your Supabase project URL and publishable key to .env.local."}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> Your Pi UID has been verified on the server and your profile is stored in Supabase.</div><button className="text-button centered" onClick={signOutPi}>Sign out of this session</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div></motion.div>}
+      {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">YOUR SPACE</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2>{piProfile?.username || "Guest Explorer"}</h2><span className="muted">{piProfile ? "Pi Network identity verified" : "Connect your Pi identity to create your global Pioneer profile."}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> VERIFIED WITH PI NETWORK</div>}<div className="profile-metrics"><div><b>{(piProfile?.total_xp ?? stats.totalXp).toLocaleString()}</b><small>XP</small></div><div><b>{piProfile?.day_streak ?? stats.dayStreak}</b><small>Day streak</small></div><div><b>{piProfile?.total_answered ?? stats.totalAnswered}</b><small>Answered</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={() => signInWithPi()} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?"Connecting to Pi…":"Sign in with Pi Network"}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?"For the real sign-in flow, open this app in Pi Browser or Pi Sandbox.":"Backend setup required: add your Supabase project URL and publishable key to .env.local."}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> Your Pi UID has been verified on the server and your profile is stored in Supabase.</div><button className="text-button centered" onClick={() => signOutPi()}>Sign out of this session</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div></motion.div>}
       </AnimatePresence>
     </main>
 
     <footer className="bottom-nav">{navItems.map(n=><motion.button key={n.id} className={view===n.id?"bottom-nav-item active":"bottom-nav-item"} onClick={()=>setView(n.id)} whileTap={{scale:.86,y:-3}}><n.icon size={19}/><span>{n.label}</span></motion.button>)}</footer>
     <AnimatePresence>{toast&&<motion.div className="toast" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:10}}>{toast}<button onClick={()=>setToast("")}><X size={14}/></button></motion.div>}</AnimatePresence>
-  </div>;
+  </div></MotionConfig>;
 }
 function ClockIcon(){return <Activity size={14}/>;}

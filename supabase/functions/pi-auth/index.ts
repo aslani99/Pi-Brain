@@ -23,7 +23,6 @@ Deno.serve(async (req) => {
       const result = await admin.from("profiles").update({
         username: identity.username,
         display_name: identity.username,
-        locale,
         updated_at: new Date().toISOString(),
       }).eq("id", existing.id).select(profileFields).single();
       if (result.error) throw result.error;
@@ -41,7 +40,6 @@ Deno.serve(async (req) => {
         const retry = await admin.from("profiles").update({
           username: identity.username,
           display_name: identity.username,
-          locale,
           updated_at: new Date().toISOString(),
         }).eq("pi_uid", identity.uid).select(profileFields).single();
         if (retry.error) throw retry.error;

@@ -23,3 +23,9 @@ verify_jwt = false
 
 [functions.quiz-catalog]
 verify_jwt = false
+
+[functions.user-preferences]
+verify_jwt = false
+
+[functions.save-user-preferences]
+verify_jwt = false

@@ -35,4 +35,4 @@ values
    '["A focal point that attracts attention","A perfectly flat perspective","A reduction in contrast","A change in the object’s real size"]'::jsonb,0,
    'Strong contrast can guide the viewer’s eye. A bright element against a dark field often becomes a natural focal point.',
    'ai-generated-original','draft','Seeded from the original prototype. Verify art principles and add a suitable source before approval.','[]'::jsonb)
-on conflict (slug) do nothing;
+on conflict (slug, locale) do nothing;
