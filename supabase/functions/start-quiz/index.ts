@@ -39,6 +39,10 @@ Deno.serve(async (req) => {
           error: "No approved questions exist in the selected language and quiz path.",
           status: 404,
         },
+        LOCALE_QUESTION_BANK_EMPTY: {
+          error: "No unseen approved questions remain in the selected quiz language and path.",
+          status: 409,
+        },
         BANK_EXHAUSTED: {
           error: "All approved questions in the selected language and quiz path have already been answered.",
           status: 409,

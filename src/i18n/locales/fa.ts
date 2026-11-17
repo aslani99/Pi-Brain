@@ -13,6 +13,8 @@ const base = { translation: {
 const additional = {
     questionBankExhausted: "همهٔ پرسش‌های تأییدشدهٔ این زبان و مسیر آزمون را پاسخ داده‌ای.",
 
+    questionBankEmptyForLocale: "برای زبان آزمون {{locale}} دسته‌بندی تأییدشده‌ای در دسترس نیست. زبان رابط کاربری با زبان آزمون متفاوت است.",
+    switchQuizToEnglish: "تغییر زبان آزمون به انگلیسی",
     quizLanguage: "زبان آزمون",
 demoTranslationUnavailable: 'برخی سؤال\u200cهای نمایشی هنوز به آن زبان ترجمه نشده\u200cاند. زبان این دور را تغییر نده.',     openMenu: "باز کردن منو", closeMenu: "بستن منو", chooseTheme: "انتخاب پوسته", themes: "پوسته‌ها", chooseUniverse: "جهان خودت را انتخاب کن", personalizeAppearance: "ظاهر برنامه را شخصی‌سازی کن", close: "بستن", lightMode: "حالت روشن", darkMode: "حالت تاریک", lightThemeTip: "برای محیطی روشن‌تر، پوسته روشن را امتحان کن.", reduceMotion: "کاهش حرکت‌ها", on: "روشن", off: "خاموش", muteSound: "بی‌صدا کردن", enableSound: "فعال‌کردن صدا", soundOn: "صدا روشن", soundOff: "صدا خاموش", openProfile: "باز کردن پروفایل",
     brandHomeLabel: "صفحه اصلی پای‌برین", cosmicQuiz: "آزمون کیهانی", liveQuest: "چالش زنده", heroTitleLine1: "آماده‌ای کشف کنی", heroTitleLine2: "آنچه ناممکن به نظر می‌رسد؟", heroDescription: "همراه کنجکاوت آماده است. وارد دنیایی از پرسش‌های شگفت‌انگیز، دانستنی‌های جذاب و کشف‌های تازه شو.", coPilot: "همراه کیهانی تو", minutes: "۵ دقیقه", stageBasedQuiz: "آزمون مرحله‌ای", keepSparkAlive: "شعله کنجکاوی‌ات را زنده نگه دار", curiosityAddsUp: "کنجکاوی تو جمع می‌شود", findNextSpark: "جرقه بعدی را پیدا کن", thisWeek: "این هفته", yourJourney: "مسیر تو", accuracy: "دقت", keepExploring: "به کشف ادامه بده!", firstAnswerProgress: "با پاسخ‌دادن به نخستین سؤال، مسیر پیشرفتت آغاز می‌شود.",

@@ -19,7 +19,7 @@ export function corsHeaders(req: Request): Record<string, string> {
 export function json(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders(req), "Content-Type": "application/json; charset=utf-8" },
+    headers: { ...corsHeaders(req), "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
   });
 }
 

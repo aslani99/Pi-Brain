@@ -1,0 +1,96 @@
+--- a/supabase/functions/start-quiz/index.ts
++++ b/supabase/functions/start-quiz/index.ts
+@@ -38,6 +38,10 @@
+         BANK_EMPTY: {
+           error: "No approved questions exist in the selected language and quiz path.",
+           status: 404,
++        },
++        LOCALE_QUESTION_BANK_EMPTY: {
++          error: "No unseen approved questions remain in the selected quiz language and path.",
++          status: 409,
+         },
+         BANK_EXHAUSTED: {
+           error: "All approved questions in the selected language and quiz path have already been answered.",
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -177,6 +177,7 @@
+     const code = error && typeof error === "object" && "code" in error
+       ? String((error as { code?: unknown }).code ?? "")
+       : "";
++    if (code === "LOCALE_QUESTION_BANK_EMPTY") return t("questionBankExhausted");
+     if (code === "BANK_EMPTY" || detail.includes("bank_empty")) return t("questionBankEmpty");
+     if (code === "BANK_EXHAUSTED" || detail.includes("bank_exhausted")) return t("questionBankExhausted");
+     if (code === "BANK_TEMPORARILY_UNAVAILABLE" || detail.includes("bank_temporarily_unavailable")) return t("questionBankInsufficient");
+@@ -616,7 +617,7 @@
+           <div className="stat-card"><div className="stat-icon answered"><Check size={18}/></div><div><strong>{stats.totalAnswered}</strong><span>{t("questions")}</span></div></div>
+         </section>
+         <section className="section-block"><div className="section-heading"><div><div className="eyebrow">{t("findNextSpark")}</div><h3>{t("categories")}</h3></div><button className="text-button" onClick={()=>setView("discover")}>{t("seeAll")} <ChevronRight size={15}/></button></div>
+-          <div className="category-grid">{availableCategories.length === 0 ? <p className="muted">{t("questionBankEmpty")}</p> : availableCategories.slice(0,4).map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18,delay:i*.055}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div>
++          <div className="category-grid">{availableCategories.length === 0 ? <div className="muted"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p>{quizLanguage !== "en" && <button className="text-button" onClick={()=>void changeQuizLanguage("en")}>{t("switchQuizToEnglish")}</button>}</div> : availableCategories.slice(0,4).map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18,delay:i*.055}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div>
+         </section>
+         <section className="bottom-grid"><div className="panel leaderboard-preview"><div className="section-heading"><div><div className="eyebrow">{t("thisWeek")}</div><h3>{t("leaderboard")}</h3></div><button className="text-button" onClick={()=>setView("rankings")}>{t("seeAll")} <ChevronRight size={15}/></button></div>{leaderboardRows.slice(0,3).map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b dir="auto">{name}</b><span className="leader-points">{pts} XP</span></div>)}</div>
+           <div className="panel progress-panel"><div className="eyebrow">{t("yourJourney")}</div><h3>{t("yourProgress")}</h3><div className="progress-ring"><div><strong>{stats.totalAnswered ? Math.round(stats.totalCorrect / stats.totalAnswered * 100) : 0}%</strong><small>{t("accuracy")}</small></div></div><p className="muted">{stats.totalAnswered ? t("progressSummary", { correct: stats.totalCorrect, total: stats.totalAnswered }) : t("firstAnswerProgress")}</p></div></section>
+@@ -634,7 +635,7 @@
+ 
+       {view==="result"&&<motion.div key="result" className="result-page" initial={{opacity:0,scale:.82,y:24,rotateX:8}} animate={{opacity:1,scale:1,y:0,rotateX:0}} transition={{type:"spring",stiffness:220,damping:18}} exit={{opacity:0,scale:.92,y:-18,filter:"blur(6px)"}}><div className="result-mascot"><img src="/assets/pi-brain-robot.png" alt={t("mascotCelebrating")}/><div className="result-glow"><Award size={38}/></div></div><div className="eyebrow">{t("dailyChallengeComplete")}</div><h1>{t("resultHeadline")}</h1><p className="muted">{t("resultDescription")}</p><div className="result-score"><strong>{score}</strong><span>{t("scoreOfQuestions", { score, total: quizMeta?.questionCount ?? sessionQuestions.length })}</span></div><div className="result-stats"><div><Star/><b>{score*15} XP</b><small>{t("earnedToday")}</small></div><div><Activity/><b>{Math.round(score/Math.max(quizMeta?.questionCount ?? sessionQuestions.length,1)*100)}%</b><small>{t("accuracy")}</small></div><div><Flame/><b>{t("oneDay")}</b><small>{t("streakProgress")}</small></div></div><motion.button className="primary-button" onClick={()=>startQuiz()} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}}>{t("playAgain")}<ChevronRight size={17}/></motion.button><button className="text-button centered" onClick={()=>setView("home")}>{t("back")}</button></motion.div>}
+ 
+-      {view==="discover"&&<motion.div key="discover" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("worldOfIdeas")}</div><h1>{t("categories")}</h1><p className="muted">{t("discoverLead")}</p><div className="category-grid discover-grid">{availableCategories.length === 0 && <p className="muted">{t("questionBankEmpty")}</p>}<motion.button className="category-card violet" onClick={()=>startQuiz()} whileHover={{y:-7,scale:1.025}} whileTap={{scale:.94}}><span className="category-icon"><Shuffle size={22}/></span><b>{t("randomQuestions")}</b><small>{t("approvedCategories")}</small><small>{t("stageNumber", { stage: randomStage })}</small><span className="category-arrow"><ChevronRight size={15}/></span></motion.button>{availableCategories.map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div></motion.div>}
++      {view==="discover"&&<motion.div key="discover" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("worldOfIdeas")}</div><h1>{t("categories")}</h1><p className="muted">{t("discoverLead")}</p><div className="category-grid discover-grid">{availableCategories.length === 0 && <div className="muted"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p>{quizLanguage !== "en" && <button className="text-button" onClick={()=>void changeQuizLanguage("en")}>{t("switchQuizToEnglish")}</button>}</div>}<motion.button className="category-card violet" onClick={()=>startQuiz()} whileHover={{y:-7,scale:1.025}} whileTap={{scale:.94}}><span className="category-icon"><Shuffle size={22}/></span><b>{t("randomQuestions")}</b><small>{t("approvedCategories")}</small><small>{t("stageNumber", { stage: randomStage })}</small><span className="category-arrow"><ChevronRight size={15}/></span></motion.button>{availableCategories.map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div></motion.div>}
+ 
+       {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("globalCommunity")}</div><h1>{t("leaderboard")}</h1><p className="muted">{t("communityLead")}</p><div className="panel ranking-panel">{leaderboardRows.length ? leaderboardRows.map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b dir="auto">{name}</b><span className="leader-points">{pts} XP</span></div>) : <p className="muted">{t("noScores")}</p>}</div><p className="demo-note"><LockKeyhole size={14}/> {piProfile ? t("liveLeaderboard") : `${t("previewOnly")} — ${t("signInForLeaderboard")} `}</p></motion.div>}
+ 
+--- a/src/i18n/locales/en.ts
++++ b/src/i18n/locales/en.ts
+@@ -13,6 +13,8 @@
+ const additional = {
+     questionBankExhausted: "You have answered every approved question in this language and quiz path.",
+ 
++    questionBankEmptyForLocale: "No approved quiz categories are available for quiz language {{locale}}. The interface language can differ from the quiz language.",
++    switchQuizToEnglish: "Use English for quiz questions",
+     quizLanguage: "Quiz language",
+ demoTranslationUnavailable: 'Some demo questions are not translated into that language yet. Keep the current language for this round.',     openMenu: "Open menu", closeMenu: "Close menu", chooseTheme: "Choose theme", themes: "Themes", chooseUniverse: "Choose your universe", personalizeAppearance: "Personalize your appearance", close: "Close", lightMode: "Light mode", darkMode: "Dark mode", lightThemeTip: "Try a light theme for a brighter look.", reduceMotion: "Reduce motion", on: "On", off: "Off", muteSound: "Mute sound", enableSound: "Enable sound", soundOn: "Sound on", soundOff: "Sound off", openProfile: "Open profile",
+     brandHomeLabel: "Pi Brain home", cosmicQuiz: "COSMIC QUIZ", liveQuest: "LIVE QUEST", heroTitleLine1: "Ready to explore", heroTitleLine2: "the impossible?", heroDescription: "Your curious co-pilot is ready. Jump into a universe of surprising questions, fascinating facts and brilliant discoveries.", coPilot: "YOUR COSMIC CO-PILOT", minutes: "5 min", stageBasedQuiz: "Stage-based quiz", keepSparkAlive: "Keep your spark alive", curiosityAddsUp: "Your curiosity adds up", findNextSpark: "FIND YOUR NEXT SPARK", thisWeek: "THIS WEEK", yourJourney: "YOUR JOURNEY", accuracy: "Accuracy", keepExploring: "Keep exploring!", firstAnswerProgress: "Your first answered question will start your progress journey.",
+--- a/src/i18n/locales/fa.ts
++++ b/src/i18n/locales/fa.ts
+@@ -13,6 +13,8 @@
+ const additional = {
+     questionBankExhausted: "همهٔ پرسش‌های تأییدشدهٔ این زبان و مسیر آزمون را پاسخ داده‌ای.",
+ 
++    questionBankEmptyForLocale: "برای زبان آزمون {{locale}} دسته‌بندی تأییدشده‌ای در دسترس نیست. زبان رابط کاربری با زبان آزمون متفاوت است.",
++    switchQuizToEnglish: "تغییر زبان آزمون به انگلیسی",
+     quizLanguage: "زبان آزمون",
+ demoTranslationUnavailable: 'برخی سؤال\u200cهای نمایشی هنوز به آن زبان ترجمه نشده\u200cاند. زبان این دور را تغییر نده.',     openMenu: "باز کردن منو", closeMenu: "بستن منو", chooseTheme: "انتخاب پوسته", themes: "پوسته‌ها", chooseUniverse: "جهان خودت را انتخاب کن", personalizeAppearance: "ظاهر برنامه را شخصی‌سازی کن", close: "بستن", lightMode: "حالت روشن", darkMode: "حالت تاریک", lightThemeTip: "برای محیطی روشن‌تر، پوسته روشن را امتحان کن.", reduceMotion: "کاهش حرکت‌ها", on: "روشن", off: "خاموش", muteSound: "بی‌صدا کردن", enableSound: "فعال‌کردن صدا", soundOn: "صدا روشن", soundOff: "صدا خاموش", openProfile: "باز کردن پروفایل",
+     brandHomeLabel: "صفحه اصلی پای‌برین", cosmicQuiz: "آزمون کیهانی", liveQuest: "چالش زنده", heroTitleLine1: "آماده‌ای کشف کنی", heroTitleLine2: "آنچه ناممکن به نظر می‌رسد؟", heroDescription: "همراه کنجکاوت آماده است. وارد دنیایی از پرسش‌های شگفت‌انگیز، دانستنی‌های جذاب و کشف‌های تازه شو.", coPilot: "همراه کیهانی تو", minutes: "۵ دقیقه", stageBasedQuiz: "آزمون مرحله‌ای", keepSparkAlive: "شعله کنجکاوی‌ات را زنده نگه دار", curiosityAddsUp: "کنجکاوی تو جمع می‌شود", findNextSpark: "جرقه بعدی را پیدا کن", thisWeek: "این هفته", yourJourney: "مسیر تو", accuracy: "دقت", keepExploring: "به کشف ادامه بده!", firstAnswerProgress: "با پاسخ‌دادن به نخستین سؤال، مسیر پیشرفتت آغاز می‌شود.",
+--- /dev/null
++++ b/scripts/diagnose-quiz-availability.sql
+@@ -0,0 +1,30 @@
++-- Read-only diagnosis for empty quiz catalog / start-quiz.
++-- Run in Supabase SQL Editor. Each result set is small.
++
++-- A. Published inventory by quiz locale and category.
++select locale, category, difficulty, count(*) as approved_count
++from public.questions
++where review_status = 'approved'
++group by locale, category, difficulty
++order by locale, category, difficulty;
++
++-- B. All catalog/allocator overloads and whether their source contains exact-locale checks.
++select p.oid::regprocedure::text as signature,
++       position('q.locale = v_locale' in pg_get_functiondef(p.oid)) > 0 as checks_exact_locale,
++       position('LOCALE_QUESTION_BANK_EMPTY' in pg_get_functiondef(p.oid)) > 0 as has_locale_empty_error
++from pg_proc p
++join pg_namespace n on n.oid = p.pronamespace
++where n.nspname = 'public'
++  and p.proname in ('get_quiz_catalog','allocate_unseen_quiz')
++order by p.proname, signature;
++
++-- C. Count eligible approved questions that have never been seen by any user.
++-- This is a global inventory check, NOT a per-account quota.
++select q.locale, q.category, count(*) as approved_total,
++       count(*) filter (where not exists (
++           select 1 from public.question_seen_history h where h.question_id = q.id
++       )) as never_seen_by_anyone
++from public.questions q
++where q.review_status = 'approved'
++group by q.locale, q.category
++order by q.locale, q.category;

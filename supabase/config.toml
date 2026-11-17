@@ -29,3 +29,7 @@ verify_jwt = false
 
 [functions.save-user-preferences]
 verify_jwt = false
+
+# Admin-only research and human review, protected by PI_BRAIN_ADMIN_SECRET.
+[functions.review-questions]
+verify_jwt = false

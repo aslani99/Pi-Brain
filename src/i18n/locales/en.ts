@@ -13,6 +13,8 @@ const base = { translation: {
 const additional = {
     questionBankExhausted: "You have answered every approved question in this language and quiz path.",
 
+    questionBankEmptyForLocale: "No approved quiz categories are available for quiz language {{locale}}. The interface language can differ from the quiz language.",
+    switchQuizToEnglish: "Use English for quiz questions",
     quizLanguage: "Quiz language",
 demoTranslationUnavailable: 'Some demo questions are not translated into that language yet. Keep the current language for this round.',     openMenu: "Open menu", closeMenu: "Close menu", chooseTheme: "Choose theme", themes: "Themes", chooseUniverse: "Choose your universe", personalizeAppearance: "Personalize your appearance", close: "Close", lightMode: "Light mode", darkMode: "Dark mode", lightThemeTip: "Try a light theme for a brighter look.", reduceMotion: "Reduce motion", on: "On", off: "Off", muteSound: "Mute sound", enableSound: "Enable sound", soundOn: "Sound on", soundOff: "Sound off", openProfile: "Open profile",
     brandHomeLabel: "Pi Brain home", cosmicQuiz: "COSMIC QUIZ", liveQuest: "LIVE QUEST", heroTitleLine1: "Ready to explore", heroTitleLine2: "the impossible?", heroDescription: "Your curious co-pilot is ready. Jump into a universe of surprising questions, fascinating facts and brilliant discoveries.", coPilot: "YOUR COSMIC CO-PILOT", minutes: "5 min", stageBasedQuiz: "Stage-based quiz", keepSparkAlive: "Keep your spark alive", curiosityAddsUp: "Your curiosity adds up", findNextSpark: "FIND YOUR NEXT SPARK", thisWeek: "THIS WEEK", yourJourney: "YOUR JOURNEY", accuracy: "Accuracy", keepExploring: "Keep exploring!", firstAnswerProgress: "Your first answered question will start your progress journey.",
