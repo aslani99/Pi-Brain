@@ -15,3 +15,10 @@
 .language-menu .language-menu-tabs button.active{background:#29264e;color:#fff}
 
 @media(max-width:560px){.language-menu-expanded{inset-inline-end:0}}
+
+/* Public rankings: keep long names visible and rank numbers aligned through #100. */
+.leader-row .rank{min-width:30px;width:auto;flex-shrink:0;font-variant-numeric:tabular-nums}
+.leader-row .leader-username{min-width:0;overflow-wrap:anywhere;flex:1}
+.leader-row .leader-avatar{flex-shrink:0}
+.leader-row .leader-points{white-space:nowrap;font-variant-numeric:tabular-nums}
+.ranking-panel .leader-row{min-height:55px}

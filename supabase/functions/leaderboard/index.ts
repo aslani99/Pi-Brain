@@ -1,26 +1,31 @@
-import { bearerToken, handleOptions, json } from "../_shared/http.ts";
-import { verifyPiAccessToken } from "../_shared/pi.ts";
+import { handleOptions, json } from "../_shared/http.ts";
 import { getAdminClient } from "../_shared/supabase.ts";
 
+// Public, read-only Top 100. Only verified Pi profiles are inserted by
+// the server's authentication flow. Never return Pi UID, profile ID, or email.
 Deno.serve(async (req) => {
   const early = handleOptions(req);
   if (early) return early;
+
   try {
-    const token = bearerToken(req);
-    if (!token) return json(req, { error: "Sign in with Pi to view the live leaderboard." }, 401);
-    await verifyPiAccessToken(token);
-    const body = await req.json().catch(() => ({}));
-    const limit = Math.min(100, Math.max(1, Number.isInteger(body.limit) ? body.limit : 50));
     const admin = getAdminClient();
     const { data, error } = await admin.from("profiles")
-      .select("username,total_xp")
+      .select("id,username,total_xp,total_correct,created_at")
       .order("total_xp", { ascending: false })
+      .order("total_correct", { ascending: false })
       .order("created_at", { ascending: true })
-      .limit(limit);
+      .order("id", { ascending: true })
+      .limit(100);
     if (error) throw error;
-    return json(req, { entries: (data ?? []).map((item, index) => ({ rank: index + 1, ...item })) });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not load leaderboard.";
-    return json(req, { error: message }, message.includes("invalid or expired") ? 401 : 500);
+
+    return json(req, {
+      entries: (data ?? []).map((item, index) => ({
+        rank: index + 1,
+        username: item.username,
+        total_xp: item.total_xp,
+      })),
+    });
+  } catch {
+    return json(req, { error: "Could not load leaderboard." }, 500);
   }
 });

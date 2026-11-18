@@ -163,6 +163,10 @@ export default function App() {
   const [remoteFeedback, setRemoteFeedback] = useState<{ questionId: string; correct: boolean; answerIndex: number; explanation: string } | null>(null);
   const [answerSubmitting, setAnswerSubmitting] = useState(false);
   const [liveLeaderboard, setLiveLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
+  const [leaderboardError, setLeaderboardError] = useState(false);
+  const [leaderboardReload, setLeaderboardReload] = useState(0);
+  const leaderboardRequestRef = useRef(0);
   const sourceCurrent = sessionQuestions[qIndex] ?? sessionQuestions[0] ?? questions[0];
   // Questions delivered by the server are already authored for the requested locale.
   // Only local demo questions should pass through the bundled translation catalogue.
@@ -191,9 +195,53 @@ export default function App() {
     return t(fallbackKey);
   };
 
-  const leaderboardRows = piProfile
-    ? liveLeaderboard.map((entry) => [String(entry.rank), entry.username, entry.total_xp.toLocaleString()])
-    : [["1","NovaMind","2,840"],["2","CuriousCat","2,610"],["3",t("you"),"2,420"],["4","OrbitFox","2,180"],["5","BlueComet","1,940"]];
+  // Public leaderboard: no demo names and no Pi sign-in requirement for read-only rankings.
+  useEffect(() => {
+    if (view !== "home" && view !== "rankings") return;
+    const requestId = ++leaderboardRequestRef.current;
+    let active = true;
+    setLeaderboardLoading(true);
+    setLeaderboardError(false);
+    if (!isBackendConfigured()) {
+      setLiveLeaderboard([]);
+      setLeaderboardError(true);
+      setLeaderboardLoading(false);
+      return;
+    }
+    void fetchLeaderboard()
+      .then(({ entries }) => {
+        if (active && requestId === leaderboardRequestRef.current) {
+          setLiveLeaderboard(entries);
+        }
+      })
+      .catch(() => {
+        if (active && requestId === leaderboardRequestRef.current) {
+          setLeaderboardError(true);
+          setLiveLeaderboard([]);
+        }
+      })
+      .finally(() => {
+        if (active && requestId === leaderboardRequestRef.current) setLeaderboardLoading(false);
+      });
+    return () => { active = false; };
+  }, [view, leaderboardReload]);
+
+  const renderLeaderboardRow = (entry: LeaderboardEntry) => (
+    <div className="leader-row" key={entry.rank}>
+      <span className={`rank rank-${entry.rank}`} dir="ltr">{entry.rank}</span>
+      <span className="leader-avatar" aria-hidden="true">{entry.username?.charAt(0)?.toUpperCase() || "?"}</span>
+      <b className="leader-username" dir="auto">{entry.username}</b>
+      <span className="leader-points" dir="ltr">{entry.total_xp.toLocaleString()} XP</span>
+    </div>
+  );
+
+  const leaderboardStatus = leaderboardLoading
+    ? <p className="muted" role="status">{t("leaderboardLoading")}</p>
+    : leaderboardError
+      ? <div role="alert"><p className="muted">{t("leaderboardLoadError")}</p><button className="text-button" onClick={() => setLeaderboardReload((value) => value + 1)}>{t("leaderboardRetry")}</button></div>
+      : liveLeaderboard.length === 0
+        ? <p className="muted">{t("leaderboardEmpty")}</p>
+        : null;
 
   const changeLanguage = async (code: string) => {
     const language = normalizeLocale(code);
@@ -302,10 +350,7 @@ export default function App() {
         if (!silent) setToast(localizeError(catalogError, "catalogLoadError"));
         setAvailableCategories([]);
       }
-      try {
-        const leaderboard = await fetchLeaderboard(result.accessToken);
-        setLiveLeaderboard(leaderboard.entries);
-      } catch { setLiveLeaderboard([]); }
+      setLeaderboardReload((value) => value + 1);
       setStats({
         totalXp: result.profile.total_xp,
         totalAnswered: result.profile.total_answered,
@@ -415,7 +460,6 @@ export default function App() {
     setRandomStage(1);
     setRemoteSessionId(null);
     setRemoteFeedback(null);
-    setLiveLeaderboard([]);
     setPiAuthMessage(t("signedOut"));
     setStats(readLocalStats());
   };
@@ -487,7 +531,7 @@ export default function App() {
         });
         setPiProfile((profile) => profile ? { ...profile, ...result.profile } : profile);
         // Refresh live rankings after each server-graded answer.
-        void fetchLeaderboard(piAccessToken).then((leaderboard) => setLiveLeaderboard(leaderboard.entries)).catch(() => undefined);
+        setLeaderboardReload((value) => value + 1);
         if (result.correct) { if (soundOn) playUiSound("success"); }
         else if (soundOn) playUiSound("select");
       } catch (error) {
@@ -592,7 +636,7 @@ export default function App() {
         <section className="section-block"><div className="section-heading"><div><div className="eyebrow">{t("findNextSpark")}</div><h3>{t("categories")}</h3></div><button className="text-button" onClick={()=>setView("discover")}>{t("seeAll")} <ChevronRight size={15}/></button></div>
           <div className="category-grid">{availableCategories.length === 0 ? <div className="muted"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p></div> : availableCategories.slice(0,4).map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18,delay:i*.055}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div>
         </section>
-        <section className="bottom-grid"><div className="panel leaderboard-preview"><div className="section-heading"><div><div className="eyebrow">{t("thisWeek")}</div><h3>{t("leaderboard")}</h3></div><button className="text-button" onClick={()=>setView("rankings")}>{t("seeAll")} <ChevronRight size={15}/></button></div>{leaderboardRows.slice(0,3).map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b dir="auto">{name}</b><span className="leader-points">{pts} XP</span></div>)}</div>
+        <section className="bottom-grid"><div className="panel leaderboard-preview"><div className="section-heading"><div><div className="eyebrow">{t("globalCommunity")}</div><h3>{t("leaderboard")}</h3></div><button className="text-button" onClick={()=>setView("rankings")}>{t("seeAll")} <ChevronRight size={15}/></button></div>{liveLeaderboard.slice(0,3).map(renderLeaderboardRow)}{leaderboardStatus}</div>
           <div className="panel progress-panel"><div className="eyebrow">{t("yourJourney")}</div><h3>{t("yourProgress")}</h3><div className="progress-ring"><div><strong>{stats.totalAnswered ? Math.round(stats.totalCorrect / stats.totalAnswered * 100) : 0}%</strong><small>{t("accuracy")}</small></div></div><p className="muted">{stats.totalAnswered ? t("progressSummary", { correct: stats.totalCorrect, total: stats.totalAnswered }) : t("firstAnswerProgress")}</p></div></section>
       </motion.div>}
 
@@ -610,7 +654,7 @@ export default function App() {
 
       {view==="discover"&&<motion.div key="discover" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("worldOfIdeas")}</div><h1>{t("categories")}</h1><p className="muted">{t("discoverLead")}</p><div className="category-grid discover-grid">{availableCategories.length === 0 && <div className="muted"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p></div>}<motion.button className="category-card violet" onClick={()=>{if (availableCategories.length) void startQuiz(); else setToast(t("questionBankEmpty"));}} disabled={availableCategories.length===0} whileHover={{y:-7,scale:1.025}} whileTap={{scale:.94}}><span className="category-icon"><Shuffle size={22}/></span><b>{t("randomQuestions")}</b><small>{t("approvedCategories")}</small><small>{t("stageNumber", { stage: randomStage })}</small><span className="category-arrow"><ChevronRight size={15}/></span></motion.button>{availableCategories.map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div></motion.div>}
 
-      {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("globalCommunity")}</div><h1>{t("leaderboard")}</h1><p className="muted">{t("communityLead")}</p><div className="panel ranking-panel">{leaderboardRows.length ? leaderboardRows.map(([rank,name,pts])=><div className="leader-row" key={rank}><span className={`rank rank-${rank}`}>{rank}</span><span className="leader-avatar">{name[0]}</span><b dir="auto">{name}</b><span className="leader-points">{pts} XP</span></div>) : <p className="muted">{t("noScores")}</p>}</div><p className="demo-note"><LockKeyhole size={14}/> {piProfile ? t("liveLeaderboard") : `${t("previewOnly")} — ${t("signInForLeaderboard")} `}</p></motion.div>}
+      {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("globalCommunity")}</div><h1>{t("leaderboard")}</h1><p className="muted">{t("leaderboardTop100")}</p><div className="panel ranking-panel">{liveLeaderboard.map(renderLeaderboardRow)}{leaderboardStatus}</div><p className="demo-note"><Trophy size={14}/> {t("leaderboardPublicNote")}</p></motion.div>}
 
       {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("yourSpace")}</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2 dir="auto">{piProfile?.username || t("guestExplorer")}</h2><span className="muted">{piProfile ? t("piIdentityVerified") : t("connectPiIdentity")}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> {t("verifiedWithPi")}</div>}<div className="profile-metrics"><div><b>{(piProfile?.total_xp ?? stats.totalXp).toLocaleString()}</b><small>XP</small></div><div><b>{piProfile?.day_streak ?? stats.dayStreak}</b><small>{t("dayStreakLabel")}</small></div><div><b>{piProfile?.total_answered ?? stats.totalAnswered}</b><small>{t("answeredLabel")}</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={() => signInWithPi()} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?t("connecting"):t("signInWithPi")}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?t("openPiBrowser"):t("backendSetup")}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> {t("piUidSaved")}</div><button className="text-button centered" onClick={() => signOutPi()}>{t("signOutSession")}</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div></motion.div>}
       </AnimatePresence>
