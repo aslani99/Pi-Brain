@@ -113,9 +113,10 @@ function readLocalPreferences(cacheKey = PREFERENCES_CACHE_KEY): UserPreferences
     }
     const value = JSON.parse(raw) as Partial<UserPreferences>;
     const language = normalizeLocale(typeof value.language === "string" ? value.language : i18n.language);
+    const quizLanguage = normalizeLocale(typeof value.quizLanguage === "string" ? value.quizLanguage : language);
     return {
       language,
-      quizLanguage: language,
+      quizLanguage,
       theme: themes.some((item) => item.id === value.theme) ? value.theme! : "cosmic",
       soundEnabled: typeof value.soundEnabled === "boolean" ? value.soundEnabled : true,
       reducedMotion: typeof value.reducedMotion === "boolean" ? value.reducedMotion : false,
@@ -139,8 +140,8 @@ export default function App() {
   const [checked, setChecked] = useState(false);
   const [score, setScore] = useState(0);
   const [languageOpen, setLanguageOpen] = useState(false);
-  // Quiz language always follows the one selected application language.
-  const quizLanguage = normalizeLocale(i18n.language);
+  // Interface language and quiz-content language are independent preferences.
+  const [quizLanguage, setQuizLanguage] = useState(() => readLocalPreferences().quizLanguage);
   const [theme, setTheme] = useState(() => readLocalPreferences().theme);
   const [reducedMotion, setReducedMotion] = useState(() => readLocalPreferences().reducedMotion);
   const [preferencesHydrated, setPreferencesHydrated] = useState(false);
@@ -260,7 +261,7 @@ export default function App() {
     if (!piAccessToken) return;
     const requestId = ++catalogRequestRef.current;
     try {
-      const catalog = await fetchQuizCatalog(piAccessToken, language);
+      const catalog = await fetchQuizCatalog(piAccessToken, quizLanguage);
       if (requestId !== catalogRequestRef.current) return;
       const metadata = new Map(categories.map((item) => [item.name, item]));
       setAvailableCategories(catalog.categories.map((name, index) => metadata.get(name) ?? ({
@@ -274,6 +275,35 @@ export default function App() {
       if (requestId === catalogRequestRef.current) {
         setToast(localizeError(error, "catalogLoadError"));
       }
+    }
+  };
+
+  const changeQuizLanguage = async (code: string) => {
+    const language = normalizeLocale(code);
+    if (view === "quiz") {
+      setToast(t("finishQuizBeforeLanguageChange"));
+      return;
+    }
+    if (language === quizLanguage) return;
+    catalogRequestRef.current += 1;
+    setQuizLanguage(language);
+    setAvailableCategories([]);
+    if (!piAccessToken) return;
+    const requestId = ++catalogRequestRef.current;
+    try {
+      const catalog = await fetchQuizCatalog(piAccessToken, language);
+      if (requestId !== catalogRequestRef.current) return;
+      const metadata = new Map(categories.map((item) => [item.name, item]));
+      setAvailableCategories(catalog.categories.map((name, index) => metadata.get(name) ?? ({
+        name, icon: "BrainCircuit",
+        color: ["violet", "blue", "cyan", "green", "pink", "amber", "indigo", "rose"][index % 8],
+        desc: t("approvedCategories"),
+      })));
+      setCategoryStages(catalog.progress ?? {});
+      setRandomStage(catalog.progress?.__random__ ?? 1);
+      if (!catalog.categories.length) setToast(t("questionBankEmptyForLocale", { locale: language.toUpperCase() }));
+    } catch (error) {
+      if (requestId === catalogRequestRef.current) setToast(localizeError(error, "catalogLoadError"));
     }
   };
 
@@ -308,15 +338,16 @@ export default function App() {
           ? {
               ...localPreferences,
               language: hasCachedPreferences ? localPreferences.language : initialAccountLocale,
-              quizLanguage: hasCachedPreferences ? localPreferences.language : initialAccountLocale,
+              quizLanguage: hasCachedPreferences ? localPreferences.quizLanguage : initialAccountLocale,
             }
           : {
               ...DEFAULT_PREFERENCES,
               ...remote,
-              quizLanguage: remote.language || result.profile.locale || "en",
+              quizLanguage: remote.quizLanguage || remote.language || result.profile.locale || "en",
             };
         const restoredLanguage = normalizeLocale(restored.language);
-        authenticatedQuizLocale = restoredLanguage;
+        authenticatedQuizLocale = normalizeLocale(restored.quizLanguage || restoredLanguage);
+        setQuizLanguage(authenticatedQuizLocale);
         preferencesVersionRef.current = remotePreferences.version;
         preferencesReadyRef.current = true;
         skipNextPreferenceSaveRef.current = remotePreferences.version > 0;
@@ -373,7 +404,7 @@ export default function App() {
   useEffect(() => {
     const preferences: UserPreferences = {
       language: normalizeLocale(i18n.language),
-      quizLanguage: normalizeLocale(i18n.language),
+      quizLanguage,
       theme,
       soundEnabled: soundOn,
       reducedMotion,
@@ -399,7 +430,7 @@ export default function App() {
     }
     const preferences: UserPreferences = {
       language: normalizeLocale(i18n.language),
-      quizLanguage: normalizeLocale(i18n.language),
+      quizLanguage,
       theme,
       soundEnabled: soundOn,
       reducedMotion,
@@ -625,7 +656,7 @@ export default function App() {
           <div className="stat-card"><div className="stat-icon answered"><Check size={18}/></div><div><strong>{stats.totalAnswered}</strong><span>{t("questions")}</span></div></div>
         </section>
         <section className="section-block"><div className="section-heading"><div><div className="eyebrow">{t("findNextSpark")}</div><h3>{t("categories")}</h3></div><button className="text-button" onClick={()=>setView("discover")}>{t("seeAll")} <ChevronRight size={15}/></button></div>
-          <div className="category-grid">{availableCategories.length === 0 ? <div className="muted"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p></div> : availableCategories.slice(0,4).map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18,delay:i*.055}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div>
+          <div className="category-grid">{availableCategories.length === 0 ? <div className="muted quiz-bank-empty"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p><button type="button" className="text-button" onClick={()=>void changeQuizLanguage("en")}>{t("switchQuizToEnglish")}</button></div> : availableCategories.slice(0,4).map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18,delay:i*.055}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div>
         </section>
         <section className="bottom-grid"><div className="panel leaderboard-preview"><div className="section-heading"><div><div className="eyebrow">{t("globalCommunity")}</div><h3>{t("leaderboard")}</h3></div><button className="text-button" onClick={()=>setView("rankings")}>{t("seeAll")} <ChevronRight size={15}/></button></div>{liveLeaderboard.slice(0,3).map(renderLeaderboardRow)}{leaderboardStatus}</div>
           <div className="panel progress-panel"><div className="eyebrow">{t("yourJourney")}</div><h3>{t("yourProgress")}</h3><div className="progress-ring"><div><strong>{stats.totalAnswered ? Math.round(stats.totalCorrect / stats.totalAnswered * 100) : 0}%</strong><small>{t("accuracy")}</small></div></div><p className="muted">{stats.totalAnswered ? t("progressSummary", { correct: stats.totalCorrect, total: stats.totalAnswered }) : t("firstAnswerProgress")}</p></div></section>
@@ -643,11 +674,11 @@ export default function App() {
 
       {view==="result"&&<motion.div key="result" className="result-page" initial={{opacity:0,scale:.82,y:24,rotateX:8}} animate={{opacity:1,scale:1,y:0,rotateX:0}} transition={{type:"spring",stiffness:220,damping:18}} exit={{opacity:0,scale:.92,y:-18,filter:"blur(6px)"}}><div className="result-mascot"><img src="/assets/pi-brain-robot.png" alt={t("mascotCelebrating")}/><div className="result-glow"><Award size={38}/></div></div><div className="eyebrow">{t("dailyChallengeComplete")}</div><h1>{t("resultHeadline")}</h1><p className="muted">{t("resultDescription")}</p><div className="result-score"><strong>{score}</strong><span>{t("scoreOfQuestions", { score, total: quizMeta?.questionCount ?? sessionQuestions.length })}</span></div><div className="result-stats"><div><Star/><b>{score*15} XP</b><small>{t("earnedToday")}</small></div><div><Activity/><b>{Math.round(score/Math.max(quizMeta?.questionCount ?? sessionQuestions.length,1)*100)}%</b><small>{t("accuracy")}</small></div><div><Flame/><b>{t("oneDay")}</b><small>{t("streakProgress")}</small></div></div><motion.button className="primary-button" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}}>{t("playAgain")}<ChevronRight size={17}/></motion.button><button className="text-button centered" onClick={()=>setView("home")}>{t("back")}</button></motion.div>}
 
-      {view==="discover"&&<motion.div key="discover" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("worldOfIdeas")}</div><h1>{t("categories")}</h1><p className="muted">{t("discoverLead")}</p><div className="category-grid discover-grid">{availableCategories.length === 0 && <div className="muted"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p></div>}<motion.button className="category-card violet" onClick={()=>{if (availableCategories.length) void startQuiz(); else setToast(t("questionBankEmpty"));}} disabled={availableCategories.length===0} whileHover={{y:-7,scale:1.025}} whileTap={{scale:.94}}><span className="category-icon"><Shuffle size={22}/></span><b>{t("randomQuestions")}</b><small>{t("approvedCategories")}</small><small>{t("stageNumber", { stage: randomStage })}</small><span className="category-arrow"><ChevronRight size={15}/></span></motion.button>{availableCategories.map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div></motion.div>}
+      {view==="discover"&&<motion.div key="discover" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("worldOfIdeas")}</div><h1>{t("categories")}</h1><p className="muted">{t("discoverLead")}</p><div className="category-grid discover-grid">{availableCategories.length === 0 && <div className="muted quiz-bank-empty"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p><button type="button" className="text-button" onClick={()=>void changeQuizLanguage("en")}>{t("switchQuizToEnglish")}</button></div>}<motion.button className="category-card violet" onClick={()=>{if (availableCategories.length) void startQuiz(); else setToast(t("questionBankEmpty"));}} disabled={availableCategories.length===0} whileHover={{y:-7,scale:1.025}} whileTap={{scale:.94}}><span className="category-icon"><Shuffle size={22}/></span><b>{t("randomQuestions")}</b><small>{t("approvedCategories")}</small><small>{t("stageNumber", { stage: randomStage })}</small><span className="category-arrow"><ChevronRight size={15}/></span></motion.button>{availableCategories.map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div></motion.div>}
 
       {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("globalCommunity")}</div><h1>{t("leaderboard")}</h1><p className="muted">{t("leaderboardTop100")}</p><div className="panel ranking-panel">{liveLeaderboard.map(renderLeaderboardRow)}{leaderboardStatus}</div><p className="demo-note"><Trophy size={14}/> {t("leaderboardPublicNote")}</p></motion.div>}
 
-      {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("yourSpace")}</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2 dir="auto">{piProfile?.username || t("guestExplorer")}</h2><span className="muted">{piProfile ? t("piIdentityVerified") : t("connectPiIdentity")}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> {t("verifiedWithPi")}</div>}<div className="profile-metrics"><div><b>{(piProfile?.total_xp ?? stats.totalXp).toLocaleString()}</b><small>XP</small></div><div><b>{piProfile?.day_streak ?? stats.dayStreak}</b><small>{t("dayStreakLabel")}</small></div><div><b>{piProfile?.total_answered ?? stats.totalAnswered}</b><small>{t("answeredLabel")}</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={() => signInWithPi()} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?t("connecting"):t("signInWithPi")}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?t("openPiBrowser"):t("backendSetup")}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> {t("piUidSaved")}</div><button className="text-button centered" onClick={() => signOutPi()}>{t("signOutSession")}</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div><section className="panel profile-settings" aria-label={t("themes")}><div className="profile-settings-heading"><Palette size={20}/><div><h2>{t("settings")}</h2><p className="muted">{t("personalizeAppearance")}</p></div></div><h3>{t("chooseTheme")}</h3><div className="profile-theme-grid">{themes.map((item)=><button type="button" key={item.id} className={`profile-theme-choice ${theme===item.id ? "active" : ""}`} aria-pressed={theme===item.id} onClick={()=>changeTheme(item.id)}><span className="theme-swatches">{item.colors.map((color,j)=><i key={j} style={{background:color}}/>)}</span><span className="theme-name"><b>{t(`theme${item.id[0].toUpperCase()}${item.id.slice(1)}`)}</b><small>{item.mode==="light"?t("lightMode"):t("darkMode")}</small></span>{theme===item.id&&<CheckCircle2 size={17}/>}</button>)}</div><button type="button" className="theme-motion-toggle profile-motion-toggle" onClick={()=>setReducedMotion(value=>!value)} aria-pressed={reducedMotion}>{t("reduceMotion")}<span>{reducedMotion ? t("on") : t("off")}</span></button></section></motion.div>}
+      {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("yourSpace")}</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2 dir="auto">{piProfile?.username || t("guestExplorer")}</h2><span className="muted">{piProfile ? t("piIdentityVerified") : t("connectPiIdentity")}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> {t("verifiedWithPi")}</div>}<div className="profile-metrics"><div><b>{(piProfile?.total_xp ?? stats.totalXp).toLocaleString()}</b><small>XP</small></div><div><b>{piProfile?.day_streak ?? stats.dayStreak}</b><small>{t("dayStreakLabel")}</small></div><div><b>{piProfile?.total_answered ?? stats.totalAnswered}</b><small>{t("answeredLabel")}</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={() => signInWithPi()} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?t("connecting"):t("signInWithPi")}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?t("openPiBrowser"):t("backendSetup")}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> {t("piUidSaved")}</div><button className="text-button centered" onClick={() => signOutPi()}>{t("signOutSession")}</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div><section className="panel profile-settings" aria-label={t("themes")}><div className="profile-settings-heading"><Palette size={20}/><div><h2>{t("settings")}</h2><p className="muted">{t("personalizeAppearance")}</p></div></div><div className="profile-quiz-language"><label htmlFor="quiz-language-select">{t("quizLanguage")}</label><select id="quiz-language-select" value={quizLanguage} onChange={(event)=>void changeQuizLanguage(event.target.value)}>{localeOptions.map(([code,label])=><option key={code} value={code}>{label}</option>)}</select><p className="muted">{t("quizLanguageHelp")}</p></div><h3>{t("chooseTheme")}</h3><div className="profile-theme-grid">{themes.map((item)=><button type="button" key={item.id} className={`profile-theme-choice ${theme===item.id ? "active" : ""}`} aria-pressed={theme===item.id} onClick={()=>changeTheme(item.id)}><span className="theme-swatches">{item.colors.map((color,j)=><i key={j} style={{background:color}}/>)}</span><span className="theme-name"><b>{t(`theme${item.id[0].toUpperCase()}${item.id.slice(1)}`)}</b><small>{item.mode==="light"?t("lightMode"):t("darkMode")}</small></span>{theme===item.id&&<CheckCircle2 size={17}/>}</button>)}</div><button type="button" className="theme-motion-toggle profile-motion-toggle" onClick={()=>setReducedMotion(value=>!value)} aria-pressed={reducedMotion}>{t("reduceMotion")}<span>{reducedMotion ? t("on") : t("off")}</span></button></section></motion.div>}
       </AnimatePresence>
     </main>
 

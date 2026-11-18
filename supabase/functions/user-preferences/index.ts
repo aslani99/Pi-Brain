@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     if (error) throw error;
 
     const language = normalizeSupportedLocale(data?.preferences?.language ?? profile.locale) ?? "en";
-    const quizLanguage = language;
+    const quizLanguage = normalizeSupportedLocale(data?.preferences?.quizLanguage) ?? language;
     const preferences = {
       ...DEFAULTS,
       ...(data?.preferences ?? {}),

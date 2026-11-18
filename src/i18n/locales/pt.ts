@@ -1,5 +1,8 @@
 const base = { translation: { greeting: "Um pouco de curiosidade abre novos mundos.", subtitle: "Sua dose diária de descobertas começa aqui.", daily: "DESAFIO DIÁRIO", start: "Começar o quiz de hoje", continue: "Mantenha sua sequência", categories: "Explore por curiosidade", seeAll: "Ver tudo", leaderboard: "Ranking global", yourProgress: "Seu progresso", streak: "dias seguidos", points: "pontos", questions: "perguntas respondidas", home: "Início", discover: "Descobrir", rankings: "Ranking", profile: "Perfil", question: "PERGUNTA", of: "DE", next: "Continuar", check: "Conferir resposta", correct: "Muito bem! Correto.", incorrect: "Boa tentativa! Aprenda algo novo.", explanation: "A GRANDE IDEIA", finish: "Ver resultado", playAgain: "Outra rodada", back: "Voltar", choose: "Escolha a melhor resposta", languages: "Idioma", welcome: "Bem-vindo de volta", level: "Explorador curioso" }};
 const additional = {
+    quizLanguageHelp: "Escolha o idioma das perguntas. Esta configuração é independente do idioma da interface.",
+    questionBankEmptyForLocale: "Não há categorias aprovadas para o idioma {{locale}}. O idioma da interface pode ser diferente do idioma do questionário.",
+    switchQuizToEnglish: "Usar inglês nas perguntas",
     questionBankExhausted: "Você já respondeu a todas as perguntas aprovadas neste idioma e percurso.",
 
     quizLanguage: "Idioma do questionário",

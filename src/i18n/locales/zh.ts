@@ -1,5 +1,8 @@
 const base = { translation: { greeting: "一点好奇心，开启更大的世界。", subtitle: "每日探索，从这里开始。", daily: "每日挑战", start: "开始今日答题", continue: "保持连续挑战", categories: "按兴趣探索", seeAll: "查看全部", leaderboard: "全球排行榜", yourProgress: "你的进度", streak: "连续天数", points: "积分", questions: "已答题目", home: "首页", discover: "探索", rankings: "排行", profile: "个人资料", question: "问题", of: "共", next: "继续", check: "检查答案", correct: "太棒了！回答正确。", incorrect: "不错的尝试！学到新知识了。", explanation: "核心知识", finish: "查看结果", playAgain: "再来一轮", back: "返回首页", choose: "选择最佳答案", languages: "语言", welcome: "欢迎回来", level: "好奇探索者" }};
 const additional = {
+    quizLanguageHelp: "选择测验题目的语言。此设置独立于界面语言。",
+    questionBankEmptyForLocale: "测验语言 {{locale}} 暂无已批准的类别。界面语言可以与测验语言不同。",
+    switchQuizToEnglish: "使用英语显示测验题目",
     questionBankExhausted: "你已回答此语言和测验路径中的所有已批准问题。",
 
     quizLanguage: "测验语言",

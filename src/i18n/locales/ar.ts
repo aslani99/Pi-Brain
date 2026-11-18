@@ -11,6 +11,9 @@ const base = { translation: {
     languages: "اللغة", welcome: "مرحبًا بعودتك", level: "مستكشف المعرفة"
   }};
 const additional = {
+    quizLanguageHelp: "اختر اللغة المستخدمة في أسئلة الاختبار. هذا الإعداد مستقل عن لغة الواجهة.",
+    questionBankEmptyForLocale: "لا توجد فئات اختبار معتمدة للغة {{locale}}. يمكن أن تختلف لغة الواجهة عن لغة الاختبار.",
+    switchQuizToEnglish: "استخدم الإنجليزية لأسئلة الاختبار",
     questionBankExhausted: "لقد أجبت عن جميع الأسئلة المعتمدة بهذه اللغة وفي مسار الاختبار هذا.",
 
     quizLanguage: "لغة الاختبار",

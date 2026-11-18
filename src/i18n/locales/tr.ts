@@ -11,6 +11,9 @@ const base = { translation: {
     welcome: "Tekrar hoş geldin", level: "Meraklı kaşif"
   }};
 const additional = {
+    quizLanguageHelp: "Soruların gösterileceği dili seç. Bu ayar arayüz dilinden bağımsızdır.",
+    questionBankEmptyForLocale: "{{locale}} sınav dili için onaylanmış kategori bulunmuyor. Arayüz dili ile sınav dili farklı olabilir.",
+    switchQuizToEnglish: "Sorular için İngilizce kullan",
     questionBankExhausted: "Bu dil ve sınav yolundaki onaylanmış tüm soruları yanıtladın.",
 
     quizLanguage: "Sınav dili",
