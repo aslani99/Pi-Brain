@@ -14,12 +14,12 @@ function getContext(): AudioContext | null {
   if (!masterGain || !masterCompressor) {
     masterGain = audioContext.createGain();
     masterCompressor = audioContext.createDynamicsCompressor();
-    // Catch occasional peaks without aggressively flattening the synthesized sounds.
-    masterCompressor.threshold.setValueAtTime(-8, audioContext.currentTime);
-    masterCompressor.knee.setValueAtTime(12, audioContext.currentTime);
-    masterCompressor.ratio.setValueAtTime(3, audioContext.currentTime);
-    masterCompressor.attack.setValueAtTime(0.004, audioContext.currentTime);
-    masterCompressor.release.setValueAtTime(0.18, audioContext.currentTime);
+    // Protect against overlapping tones while preserving a strong output level.
+    masterCompressor.threshold.setValueAtTime(-5, audioContext.currentTime);
+    masterCompressor.knee.setValueAtTime(4, audioContext.currentTime);
+    masterCompressor.ratio.setValueAtTime(12, audioContext.currentTime);
+    masterCompressor.attack.setValueAtTime(0.001, audioContext.currentTime);
+    masterCompressor.release.setValueAtTime(0.12, audioContext.currentTime);
     masterGain.gain.setValueAtTime(1, audioContext.currentTime);
     masterGain.connect(masterCompressor);
     masterCompressor.connect(audioContext.destination);
@@ -35,7 +35,8 @@ export function playUiSound(kind: "tap" | "select" | "success" = "tap") {
 
   const now = ctx.currentTime;
   const frequencies = kind === "success" ? [660, 880, 1108] : kind === "select" ? [520, 780] : [420];
-  const peak = kind === "success" ? 0.165 : 0.075;
+  // Near full-scale synthesized UI sound; dynamics control handles overlap.
+  const peak = kind === "success" ? 0.68 : kind === "select" ? 0.62 : 0.72;
   const outputBus = masterGain;
 
   frequencies.forEach((frequency, index) => {
@@ -54,7 +55,7 @@ export function playUiSound(kind: "tap" | "select" | "success" = "tap") {
   });
 }
 
-/** Starts the original ambient synth after a user gesture; level is tripled. */
+/** Loud ambient synth, adjusted for the limited low-frequency response of phone speakers. */
 export function startAmbientMusic() {
   const ctx = getContext();
   if (!ctx || !masterGain || ambientStarted) return;
@@ -62,15 +63,16 @@ export function startAmbientMusic() {
   ambientStarted = true;
   ambientGain = ctx.createGain();
   ambientGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-  ambientGain.gain.exponentialRampToValueAtTime(0.036, ctx.currentTime + 1.8);
+  ambientGain.gain.exponentialRampToValueAtTime(0.76, ctx.currentTime + 1.8);
   ambientGain.connect(masterGain);
 
-  [110, 164.81, 220].forEach((frequency, index) => {
+  // Higher-register harmonics project better on small mobile speakers.
+  [220, 329.63, 440].forEach((frequency, index) => {
     const oscillator = ctx.createOscillator();
     const voiceGain = ctx.createGain();
     oscillator.type = index === 1 ? "triangle" : "sine";
     oscillator.frequency.value = frequency;
-    voiceGain.gain.value = index === 1 ? 0.22 : 0.32;
+    voiceGain.gain.value = index === 1 ? 0.25 : 0.30;
     oscillator.connect(voiceGain);
     voiceGain.connect(ambientGain!);
     oscillator.start();
