@@ -22,3 +22,25 @@
 .leader-row .leader-avatar{flex-shrink:0}
 .leader-row .leader-points{white-space:nowrap;font-variant-numeric:tabular-nums}
 .ranking-panel .leader-row{min-height:55px}
+
+/* Pi Brain: profile settings and mobile navigation */
+.brand-mark{overflow:hidden;background:transparent}
+.brand-mark img{display:block;width:100%;height:100%;object-fit:contain}
+.profile-settings{margin-top:22px;padding:24px}
+.profile-settings-heading{display:flex;align-items:center;gap:13px;margin-bottom:20px}
+.profile-settings-heading h2{font-size:20px;margin:0 0 5px}
+.profile-settings-heading p{margin:0}
+.profile-settings>h3{font-size:15px;margin:0 0 14px}
+.profile-theme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.profile-theme-choice{border:1px solid var(--line);border-radius:15px;padding:14px;display:flex;align-items:center;gap:12px;text-align:start;background:rgba(130,120,255,.06);min-height:70px}
+.profile-theme-choice.active{border-color:#a99aff;background:rgba(130,120,255,.17)}
+.profile-theme-choice .theme-name{flex:1;display:flex;flex-direction:column;gap:3px}
+.profile-theme-choice .theme-name small{color:var(--muted)}
+.profile-theme-choice .theme-swatches{display:flex;flex-shrink:0}
+.profile-theme-choice .theme-swatches i{width:13px;height:24px;display:block;border-radius:3px;margin-inline-start:-2px}
+.profile-motion-toggle{margin-top:18px;width:100%;display:flex;align-items:center;justify-content:space-between}
+@media(max-width:850px){
+  .mobile-menu-button,.mobile-menu{display:none!important}
+  .main-content{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
+}
+@media(max-width:560px){.top-actions{gap:6px}.profile-settings{padding:16px}.profile-theme-grid{grid-template-columns:1fr 1fr}.profile-theme-choice{padding:9px;gap:8px;min-height:68px}.profile-theme-choice .theme-swatches i{width:9px;height:20px}}

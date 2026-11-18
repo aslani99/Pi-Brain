@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
-import { Activity, Atom, Award, BrainCircuit, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Cpu, Flame, Globe2, Home, Languages, Leaf, Lightbulb, LockKeyhole, Menu, Palette, Play, Sparkles, Star, Trophy, UserRound, X, Orbit, Shapes, Volume2, VolumeX, Sun, CheckCircle2, Shuffle } from "lucide-react";
+import { Activity, Atom, Award, BrainCircuit, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Cpu, Flame, Globe2, Home, Languages, Leaf, Lightbulb, LockKeyhole, Palette, Play, Sparkles, Star, Trophy, UserRound, X, Orbit, Shapes, Volume2, VolumeX, Sun, CheckCircle2, Shuffle } from "lucide-react";
 import i18n, { applyLocale, localeOptions, normalizeLocale } from "./i18n/config";
 import { hasQuestionTranslation, localizeCategory, localizeCategoryDescription, localizeDifficulty, localizeQuestion } from "./i18n/question-translations";
 import { categories, questions, type Question } from "./data";
@@ -141,7 +141,6 @@ export default function App() {
   const [languageOpen, setLanguageOpen] = useState(false);
   // Quiz language always follows the one selected application language.
   const quizLanguage = normalizeLocale(i18n.language);
-  const [themeOpen, setThemeOpen] = useState(false);
   const [theme, setTheme] = useState(() => readLocalPreferences().theme);
   const [reducedMotion, setReducedMotion] = useState(() => readLocalPreferences().reducedMotion);
   const [preferencesHydrated, setPreferencesHydrated] = useState(false);
@@ -150,7 +149,6 @@ export default function App() {
   const catalogRequestRef = useRef(0);
   const preferencesReadyRef = useRef(false);
   const skipNextPreferenceSaveRef = useRef(false);
-  const [mobileMenu, setMobileMenu] = useState(false);
   const [toast, setToast] = useState("");
   const [soundOn, setSoundOn] = useState(() => readLocalPreferences().soundEnabled);
   const [stats, setStats] = useState<LocalStats>(readLocalStats);
@@ -465,7 +463,6 @@ export default function App() {
   };
   const changeTheme = (id:string) => {
     setTheme(id);
-    setThemeOpen(false);
     if (soundOn) playUiSound("select");
   };
   const toggleSound = () => { const next = !soundOn; setSoundOn(next); if (next) startAmbientMusic(); else stopAmbientMusic(); };
@@ -593,17 +590,13 @@ export default function App() {
   return <MotionConfig reducedMotion={reducedMotion ? "always" : "user"}><div className="app-shell" data-theme={theme} data-reduced-motion={reducedMotion ? "true" : "false"} onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => { const target = event.target as HTMLElement; if (soundOn && target.closest("button")) { startAmbientMusic(); playUiSound("tap"); } }}>
     <header className="topbar">
       <button className="brand" onClick={()=>setView("home")} aria-label={t("brandHomeLabel")}>
-        <span className="brand-mark"><Orbit size={22}/></span><span>pi<span className="brand-accent">brain</span></span><span className="brand-beta">{t("cosmicQuiz")}</span>
+        <span className="brand-mark"><img src={`${import.meta.env.BASE_URL}pi-brain-logo.png`} alt="" width="32" height="32" /></span><span>pi<span className="brand-accent">brain</span></span><span className="brand-beta">{t("cosmicQuiz")}</span>
       </button>
       <nav className="desktop-nav">{navItems.map(n=><motion.button key={n.id} className={view===n.id?"nav-link active":"nav-link"} onClick={()=>setView(n.id)} whileTap={{scale:.9}} transition={{type:"spring",stiffness:500,damping:20}}><n.icon size={17}/>{n.label}</motion.button>)}</nav>
       <div className="top-actions">
-        <div className="theme-wrap">
-          <motion.button className="icon-button theme-button" onClick={()=>{setThemeOpen(v=>!v);setLanguageOpen(false)}} whileTap={{scale:.86,rotate:18}} aria-label={t("chooseTheme")} aria-expanded={themeOpen} title={t("chooseTheme")}><Palette size={17}/><span>{t("themes").toUpperCase()}</span></motion.button>
-          <AnimatePresence>{themeOpen&&<motion.div className="theme-menu" initial={{opacity:0,y:12,scale:.94,filter:"blur(5px)"}} animate={{opacity:1,y:0,scale:1,filter:"blur(0px)"}} exit={{opacity:0,y:8,scale:.96}} transition={{type:"spring",stiffness:420,damping:25}}><div className="theme-menu-head"><div><b>{t("chooseUniverse")}</b><small>{t("personalizeAppearance")}</small></div><button className="theme-close" onClick={()=>setThemeOpen(false)} aria-label={t("close")}><X size={15}/></button></div><div className="theme-options">{themes.map((item,i)=><motion.button key={item.id} className={`theme-option ${theme===item.id?"active":""}`} onClick={()=>changeTheme(item.id)} whileHover={{x:4,scale:1.015}} whileTap={{scale:.96}} initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} transition={{delay:i*.035}}><span className="theme-swatches">{item.colors.map((color,j)=><i key={j} style={{background:color}}/>)}</span><span className="theme-name"><b>{t(`theme${item.id[0].toUpperCase()}${item.id.slice(1)}`)}</b><small>{item.mode==="light"?t("lightMode"):t("darkMode")}</small></span>{theme===item.id&&<CheckCircle2 size={17}/>}</motion.button>)}</div><div className="theme-tip"><Sun size={13}/> {t("lightThemeTip")}</div><button className="theme-motion-toggle" onClick={()=>setReducedMotion(value=>!value)} aria-pressed={reducedMotion}>{t("reduceMotion")}<span>{reducedMotion ? t("on") : t("off")}</span></button></motion.div>}</AnimatePresence>
-        </div>
         <button className={`icon-button sound-button ${soundOn ? "sound-on" : ""}`} onClick={toggleSound} aria-label={soundOn ? t("muteSound") : t("enableSound")} title={soundOn ? t("soundOn") : t("soundOff")}>{soundOn ? <Volume2 size={17}/> : <VolumeX size={17}/>}<span>{soundOn ? t("soundOn").toUpperCase() : t("soundOff").toUpperCase()}</span></button>
         <div className="language-wrap">
-          <button className="icon-button language-button" onClick={()=>{setLanguageOpen(v=>!v);setThemeOpen(false)}} aria-label={t("languages")} title={t("languages")} aria-expanded={languageOpen}><Languages size={17}/><span>{normalizeLocale(i18n.language).toUpperCase()}</span><ChevronDown size={14}/></button>
+          <button className="icon-button language-button" onClick={()=>{setLanguageOpen(v=>!v)}} aria-label={t("languages")} title={t("languages")} aria-expanded={languageOpen}><Languages size={17}/><span>{normalizeLocale(i18n.language).toUpperCase()}</span><ChevronDown size={14}/></button>
           <AnimatePresence>{languageOpen&&<motion.div className="language-menu language-menu-expanded" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:8}}>
 
             {localeOptions.map(([code,label])=>{
@@ -613,11 +606,9 @@ export default function App() {
           </motion.div>}</AnimatePresence>
         </div>
         <button className="avatar" onClick={()=>setView("profile")} aria-label={t("openProfile")}>{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</button>
-        <button className="mobile-menu-button" onClick={()=>setMobileMenu(v=>!v)} aria-label={mobileMenu ? t("closeMenu") : t("openMenu")} aria-expanded={mobileMenu}><Menu/></button>
       </div>
     </header>
 
-    {mobileMenu&&<div className="mobile-menu">{navItems.map(n=><button key={n.id} onClick={()=>{setView(n.id);setMobileMenu(false)}}><n.icon size={17}/>{n.label}</button>)}</div>}
 
     <main className="main-content">
       <AnimatePresence mode="wait">
@@ -656,7 +647,7 @@ export default function App() {
 
       {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("globalCommunity")}</div><h1>{t("leaderboard")}</h1><p className="muted">{t("leaderboardTop100")}</p><div className="panel ranking-panel">{liveLeaderboard.map(renderLeaderboardRow)}{leaderboardStatus}</div><p className="demo-note"><Trophy size={14}/> {t("leaderboardPublicNote")}</p></motion.div>}
 
-      {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("yourSpace")}</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2 dir="auto">{piProfile?.username || t("guestExplorer")}</h2><span className="muted">{piProfile ? t("piIdentityVerified") : t("connectPiIdentity")}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> {t("verifiedWithPi")}</div>}<div className="profile-metrics"><div><b>{(piProfile?.total_xp ?? stats.totalXp).toLocaleString()}</b><small>XP</small></div><div><b>{piProfile?.day_streak ?? stats.dayStreak}</b><small>{t("dayStreakLabel")}</small></div><div><b>{piProfile?.total_answered ?? stats.totalAnswered}</b><small>{t("answeredLabel")}</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={() => signInWithPi()} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?t("connecting"):t("signInWithPi")}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?t("openPiBrowser"):t("backendSetup")}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> {t("piUidSaved")}</div><button className="text-button centered" onClick={() => signOutPi()}>{t("signOutSession")}</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div></motion.div>}
+      {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("yourSpace")}</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2 dir="auto">{piProfile?.username || t("guestExplorer")}</h2><span className="muted">{piProfile ? t("piIdentityVerified") : t("connectPiIdentity")}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> {t("verifiedWithPi")}</div>}<div className="profile-metrics"><div><b>{(piProfile?.total_xp ?? stats.totalXp).toLocaleString()}</b><small>XP</small></div><div><b>{piProfile?.day_streak ?? stats.dayStreak}</b><small>{t("dayStreakLabel")}</small></div><div><b>{piProfile?.total_answered ?? stats.totalAnswered}</b><small>{t("answeredLabel")}</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={() => signInWithPi()} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?t("connecting"):t("signInWithPi")}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?t("openPiBrowser"):t("backendSetup")}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> {t("piUidSaved")}</div><button className="text-button centered" onClick={() => signOutPi()}>{t("signOutSession")}</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div><section className="panel profile-settings" aria-label={t("themes")}><div className="profile-settings-heading"><Palette size={20}/><div><h2>{t("settings")}</h2><p className="muted">{t("personalizeAppearance")}</p></div></div><h3>{t("chooseTheme")}</h3><div className="profile-theme-grid">{themes.map((item)=><button type="button" key={item.id} className={`profile-theme-choice ${theme===item.id ? "active" : ""}`} aria-pressed={theme===item.id} onClick={()=>changeTheme(item.id)}><span className="theme-swatches">{item.colors.map((color,j)=><i key={j} style={{background:color}}/>)}</span><span className="theme-name"><b>{t(`theme${item.id[0].toUpperCase()}${item.id.slice(1)}`)}</b><small>{item.mode==="light"?t("lightMode"):t("darkMode")}</small></span>{theme===item.id&&<CheckCircle2 size={17}/>}</button>)}</div><button type="button" className="theme-motion-toggle profile-motion-toggle" onClick={()=>setReducedMotion(value=>!value)} aria-pressed={reducedMotion}>{t("reduceMotion")}<span>{reducedMotion ? t("on") : t("off")}</span></button></section></motion.div>}
       </AnimatePresence>
     </main>
 
