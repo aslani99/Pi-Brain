@@ -561,7 +561,7 @@ export default function App() {
         // Refresh live rankings after each server-graded answer.
         setLeaderboardReload((value) => value + 1);
         if (result.correct) { if (soundOn) playUiSound("success"); }
-        else if (soundOn) playUiSound("select");
+        else if (soundOn) playUiSound("wrong");
       } catch (error) {
         setToast(localizeError(error, "answerSaveError"));
       } finally {
@@ -573,7 +573,7 @@ export default function App() {
     const isCorrect = selected === current.answer;
     setChecked(true);
     if (isCorrect) { setScore(s=>s+1); if (soundOn) playUiSound("success"); }
-    else if (soundOn) playUiSound("select");
+    else if (soundOn) playUiSound("wrong");
 
     const today = todayKey();
     const nextStreak = stats.lastPlayedDate === today
