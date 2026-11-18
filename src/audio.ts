@@ -3,6 +3,8 @@ let masterGain: GainNode | null = null;
 let masterCompressor: DynamicsCompressorNode | null = null;
 let ambientAudio: HTMLAudioElement | null = null;
 let ambientStarted = false;
+const SFX_VOLUME = 0.9;
+const MUSIC_VOLUME = 0.20;
 
 function getContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -59,7 +61,7 @@ export function playUiSound(kind: "tap" | "select" | "success" | "wrong" = "tap"
     oscillator.frequency.setValueAtTime(520, now);
     oscillator.frequency.exponentialRampToValueAtTime(430, now + 0.08);
 
-    const envelope = createEnvelope(ctx, output, now, 0.1, 0.008, 0.1);
+    const envelope = createEnvelope(ctx, output, now, SFX_VOLUME, 0.008, 0.1);
     oscillator.connect(envelope);
     oscillator.start(now);
     oscillator.stop(now + 0.12);
@@ -74,7 +76,7 @@ export function playUiSound(kind: "tap" | "select" | "success" | "wrong" = "tap"
       oscillator.type = index === 1 ? "triangle" : "sine";
       oscillator.frequency.setValueAtTime(frequency, startAt);
 
-      const envelope = createEnvelope(ctx, output, startAt, 0.1, 0.01, 0.16);
+      const envelope = createEnvelope(ctx, output, startAt, SFX_VOLUME, 0.01, 0.16);
       oscillator.connect(envelope);
       oscillator.start(startAt);
       oscillator.stop(startAt + 0.18);
@@ -87,14 +89,14 @@ export function playUiSound(kind: "tap" | "select" | "success" | "wrong" = "tap"
     low.type = "sine";
     low.frequency.setValueAtTime(392, now);
     low.frequency.exponentialRampToValueAtTime(300, now + 0.22);
-    const lowEnv = createEnvelope(ctx, output, now, 0.1, 0.01, 0.24);
+    const lowEnv = createEnvelope(ctx, output, now, SFX_VOLUME, 0.01, 0.24);
     low.connect(lowEnv);
 
     const high = ctx.createOscillator();
     high.type = "triangle";
     high.frequency.setValueAtTime(466.16, now + 0.012);
     high.frequency.exponentialRampToValueAtTime(349.23, now + 0.24);
-    const highEnv = createEnvelope(ctx, output, now + 0.012, 0.07, 0.01, 0.26);
+    const highEnv = createEnvelope(ctx, output, now + 0.012, SFX_VOLUME * 0.7, 0.01, 0.26);
     high.connect(highEnv);
 
     low.start(now);
@@ -111,7 +113,7 @@ export function playUiSound(kind: "tap" | "select" | "success" | "wrong" = "tap"
     oscillator.type = index % 2 === 0 ? "sine" : "triangle";
     oscillator.frequency.setValueAtTime(frequency, startAt);
 
-    const envelope = createEnvelope(ctx, output, startAt, 0.1, 0.012, 0.24 + index * 0.015);
+    const envelope = createEnvelope(ctx, output, startAt, SFX_VOLUME, 0.012, 0.24 + index * 0.015);
     oscillator.connect(envelope);
     oscillator.start(startAt);
     oscillator.stop(startAt + 0.28 + index * 0.015);
@@ -122,10 +124,10 @@ function getAmbientAudio() {
   if (typeof window === "undefined") return null;
 
   if (!ambientAudio) {
-    ambientAudio = new Audio("/assets/quiz-ambient.mp3");
+    ambientAudio = new Audio(`${import.meta.env.BASE_URL}assets/quiz-ambient.mp3`);
     ambientAudio.loop = true;
     ambientAudio.preload = "auto";
-    ambientAudio.volume = 0.20;
+    ambientAudio.volume = MUSIC_VOLUME;
   }
 
   return ambientAudio;
@@ -137,7 +139,7 @@ export function startAmbientMusic() {
   const audio = getAmbientAudio();
   if (!audio) return;
 
-  audio.volume = 0.20;
+  audio.volume = MUSIC_VOLUME;
 
   if (ambientStarted && !audio.paused) return;
 
@@ -148,7 +150,7 @@ export function startAmbientMusic() {
 }
 
 export function stopAmbientMusic() {
-  const audio = getAmbientAudio();
+  const audio = ambientAudio;
   if (!audio) return;
 
   audio.pause();

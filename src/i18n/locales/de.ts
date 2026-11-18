@@ -1,5 +1,8 @@
 const base = { translation: { greeting: "Ein bisschen Neugier eröffnet neue Welten.", subtitle: "Deine tägliche Entdeckungsreise beginnt hier.", daily: "TÄGLICHE CHALLENGE", start: "Heutiges Quiz starten", continue: "Bleib in deiner Serie", categories: "Nach Neugier entdecken", seeAll: "Alle ansehen", leaderboard: "Weltweite Rangliste", yourProgress: "Dein Fortschritt", streak: "Tage in Folge", points: "Punkte", questions: "beantwortete Fragen", home: "Start", discover: "Entdecken", rankings: "Rangliste", profile: "Profil", question: "FRAGE", of: "VON", next: "Weiter", check: "Antwort prüfen", correct: "Großartig! Richtig.", incorrect: "Guter Versuch! Etwas Neues gelernt.", explanation: "DIE IDEE", finish: "Ergebnis ansehen", playAgain: "Noch eine Runde", back: "Zurück", choose: "Wähle die beste Antwort", languages: "Sprache", welcome: "Willkommen zurück", level: "Neugier-Entdecker" }};
 const additional = {
+    audioSettingsTitle: "Audioeinstellungen",
+    soundEffectsSetting: "Klick- und Soundeffekte",
+    backgroundMusicSetting: "Hintergrundmusik",
     quizLanguageHelp: "Wähle die Sprache der Quizfragen. Diese Einstellung ist unabhängig von der Oberflächensprache.",
     questionBankEmptyForLocale: "Für die Quizsprache {{locale}} sind keine freigegebenen Kategorien verfügbar. Die Oberflächensprache kann von der Quizsprache abweichen.",
     switchQuizToEnglish: "Englisch für Quizfragen verwenden",

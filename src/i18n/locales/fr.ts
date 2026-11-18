@@ -1,5 +1,8 @@
 const base = { translation: { greeting: "Un peu de curiosité ouvre de grands horizons.", subtitle: "Votre dose quotidienne de découverte commence ici.", daily: "DÉFI DU JOUR", start: "Commencer le quiz du jour", continue: "Continuez votre série", categories: "Explorez vos curiosités", seeAll: "Tout voir", leaderboard: "Classement mondial", yourProgress: "Votre progression", streak: "jours de suite", points: "points", questions: "questions répondues", home: "Accueil", discover: "Découvrir", rankings: "Classement", profile: "Profil", question: "QUESTION", of: "SUR", next: "Continuer", check: "Vérifier", correct: "Bravo ! Bonne réponse.", incorrect: "Bien essayé ! Voici une nouvelle découverte.", explanation: "L'IDÉE CLÉ", finish: "Voir mon résultat", playAgain: "Rejouer", back: "Retour", choose: "Choisissez la meilleure réponse", languages: "Langue", welcome: "Bon retour", level: "Explorateur curieux" }};
 const additional = {
+    audioSettingsTitle: "Paramètres audio",
+    soundEffectsSetting: "Clics et effets sonores",
+    backgroundMusicSetting: "Musique de fond",
     quizLanguageHelp: "Choisissez la langue des questions. Ce réglage est indépendant de la langue de l’interface.",
     questionBankEmptyForLocale: "Aucune catégorie de quiz approuvée n’est disponible pour la langue {{locale}}. La langue de l’interface peut être différente.",
     switchQuizToEnglish: "Utiliser l’anglais pour les questions",

@@ -151,6 +151,7 @@ export type UserPreferences = {
   quizLanguage: string;
   theme: string;
   soundEnabled: boolean;
+  musicEnabled: boolean;
   reducedMotion: boolean;
 };
 

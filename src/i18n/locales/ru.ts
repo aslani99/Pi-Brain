@@ -1,5 +1,8 @@
 const base = { translation: { greeting: "Немного любопытства открывает большие миры.", subtitle: "Ежедневные открытия начинаются здесь.", daily: "ЕЖЕДНЕВНЫЙ ВЫЗОВ", start: "Начать сегодняшний квиз", continue: "Продолжайте серию", categories: "Исследуйте по интересам", seeAll: "Показать все", leaderboard: "Мировой рейтинг", yourProgress: "Ваш прогресс", streak: "дней подряд", points: "баллов", questions: "отвечено вопросов", home: "Главная", discover: "Открытия", rankings: "Рейтинг", profile: "Профиль", question: "ВОПРОС", of: "ИЗ", next: "Далее", check: "Проверить ответ", correct: "Отлично! Верно.", incorrect: "Хорошая попытка! Вот новое знание.", explanation: "ГЛАВНАЯ МЫСЛЬ", finish: "Мой результат", playAgain: "Ещё раунд", back: "На главную", choose: "Выберите лучший ответ", languages: "Язык", welcome: "С возвращением", level: "Исследователь" }};
 const additional = {
+    audioSettingsTitle: "Настройки звука",
+    soundEffectsSetting: "Звуки нажатий и эффекты",
+    backgroundMusicSetting: "Фоновая музыка",
     quizLanguageHelp: "Выберите язык вопросов. Этот параметр не зависит от языка интерфейса.",
     questionBankEmptyForLocale: "Для языка викторины {{locale}} нет одобренных категорий. Язык интерфейса может отличаться от языка вопросов.",
     switchQuizToEnglish: "Использовать английский для вопросов",

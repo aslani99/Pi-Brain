@@ -11,6 +11,9 @@ const base = { translation: {
     languages: "Language", welcome: "Welcome back", level: "Curiosity explorer"
   }};
 const additional = {
+    audioSettingsTitle: "Audio settings",
+    soundEffectsSetting: "Sound effects and clicks",
+    backgroundMusicSetting: "Background music",
     questionBankExhausted: "You have answered every approved question in this language and quiz path.",
 
     settings: "Settings",

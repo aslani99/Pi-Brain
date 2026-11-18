@@ -11,6 +11,9 @@ const base = { translation: {
     languages: "زبان", welcome: "خوش برگشتی", level: "کاوشگر کنجکاوی"
   }};
 const additional = {
+    audioSettingsTitle: "تنظیمات صدا",
+    soundEffectsSetting: "صدای کلیک و جلوه‌های صوتی",
+    backgroundMusicSetting: "موسیقی پس‌زمینه",
     quizLanguageHelp: "زبان نمایش پرسش‌ها را انتخاب کنید. این گزینه مستقل از زبان رابط کاربری است.",
     questionBankExhausted: "همهٔ پرسش‌های تأییدشدهٔ این زبان و مسیر آزمون را پاسخ داده‌ای.",
 

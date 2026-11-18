@@ -1,5 +1,8 @@
 const base = { translation: { greeting: "小さな好奇心が、新しい世界を開きます。", subtitle: "毎日の発見はここから始まります。", daily: "デイリーチャレンジ", start: "今日のクイズを始める", continue: "連続記録を続けよう", categories: "興味から探す", seeAll: "すべて見る", leaderboard: "世界ランキング", yourProgress: "あなたの進捗", streak: "日連続", points: "ポイント", questions: "回答した問題", home: "ホーム", discover: "発見", rankings: "ランキング", profile: "プロフィール", question: "問題", of: "/", next: "次へ", check: "答えを確認", correct: "すばらしい！正解です。", incorrect: "いい挑戦です！新しい発見です。", explanation: "ポイント", finish: "結果を見る", playAgain: "もう一度", back: "ホームへ", choose: "最適な答えを選んでください", languages: "言語", welcome: "おかえりなさい", level: "好奇心探究者" }};
 const additional = {
+    audioSettingsTitle: "音声設定",
+    soundEffectsSetting: "クリック音と効果音",
+    backgroundMusicSetting: "バックグラウンド音楽",
     quizLanguageHelp: "クイズの問題に使用する言語を選択します。この設定は画面表示の言語とは独立しています。",
     questionBankEmptyForLocale: "クイズ言語 {{locale}} で承認済みのカテゴリーはありません。画面表示の言語とクイズの言語は異なっていてもかまいません。",
     switchQuizToEnglish: "問題に英語を使用する",
