@@ -153,6 +153,13 @@ export default function App() {
   const preferencesReadyRef = useRef(false);
   const skipNextPreferenceSaveRef = useRef(false);
   const [toast, setToast] = useState("");
+  // Auto-dismiss transient notifications after four seconds. Each new message
+  // restarts the timer; AnimatePresence handles the exit fade separately.
+  useEffect(() => {
+    if (!toast) return;
+    const timeoutId = window.setTimeout(() => setToast(""), 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [toast]);
   const [soundOn, setSoundOn] = useState(() => readLocalPreferences().soundEnabled);
   const [musicOn, setMusicOn] = useState(() => readLocalPreferences().musicEnabled);
   const [stats, setStats] = useState<LocalStats>(readLocalStats);
@@ -667,7 +674,7 @@ export default function App() {
         <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/>{t("welcome")}</div><h1>{t("greeting")}</h1><p className="muted">{t("subtitle")}</p></div><div className="level-pill"><Sparkles size={15}/>{t("level")}</div></div>
         <section className="hero-card">
           <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">{t("liveQuest")}</span></div><h2>{t("heroTitleLine1")}<br/><span>{t("heroTitleLine2")}</span></h2><p>{t("heroDescription")}</p><motion.button className="primary-button hero-cta" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> {t("minutes")}</span><span><CircleHelp size={14}/> {t("stageBasedQuiz")}</span><span><Star size={14}/> +120 XP</span></div></div>
-          <div className="hero-art"><div className="robot-aura"/><img src="/assets/pi-brain-robot.png" alt={t("coPilot")}/><div className="robot-orbit orbit-a"/><div className="robot-orbit orbit-b"/><div className="mascot-tag"><Sparkles size={14}/> {t("coPilot")}</div></div>
+          <div className="hero-art"><div className="robot-aura"/><div className="robot-figure"><img src="/assets/pi-brain-robot.png" alt={t("coPilot")}/><div className="mascot-tag"><Sparkles size={14}/> {t("coPilot")}</div></div><div className="robot-orbit orbit-a"/><div className="robot-orbit orbit-b"/></div>
           <div className="hero-orb orb-one"/><div className="hero-orb orb-two"/><div className="hero-spark spark-a">✦</div><div className="hero-spark spark-b">✧</div><div className="hero-spark spark-c">✦</div>
         </section>
         <section className="stat-grid">
@@ -714,7 +721,7 @@ export default function App() {
     </main>
 
     <footer className="bottom-nav">{navItems.map(n=><motion.button key={n.id} className={view===n.id?"bottom-nav-item active":"bottom-nav-item"} onClick={()=>setView(n.id)} whileTap={{scale:.86,y:-3}}><n.icon size={19}/><span>{n.label}</span></motion.button>)}</footer>
-    <AnimatePresence>{toast&&<motion.div className="toast" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:10}}>{toast}<button onClick={()=>setToast("")}><X size={14}/></button></motion.div>}</AnimatePresence>
+    <AnimatePresence>{toast&&<motion.div className="toast" role="status" aria-live="polite" initial={{opacity:0,y:15}} animate={{opacity:1,y:0}} exit={{opacity:0,y:10}} transition={{duration:.32,ease:"easeOut"}}><span className="toast-message" dir="auto">{toast}</span><button type="button" aria-label={t("close")} onClick={()=>setToast("")}><X size={17}/></button></motion.div>}</AnimatePresence>
   </div></MotionConfig>;
 }
 function ClockIcon(){return <Activity size={14}/>;}

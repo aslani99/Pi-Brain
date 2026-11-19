@@ -1,0 +1,179 @@
+diff --git a/src/App.tsx b/src/App.tsx
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -674,7 +674,7 @@
+         <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/>{t("welcome")}</div><h1>{t("greeting")}</h1><p className="muted">{t("subtitle")}</p></div><div className="level-pill"><Sparkles size={15}/>{t("level")}</div></div>
+         <section className="hero-card">
+           <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">{t("liveQuest")}</span></div><h2>{t("heroTitleLine1")}<br/><span>{t("heroTitleLine2")}</span></h2><p>{t("heroDescription")}</p><motion.button className="primary-button hero-cta" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> {t("minutes")}</span><span><CircleHelp size={14}/> {t("stageBasedQuiz")}</span><span><Star size={14}/> +120 XP</span></div></div>
+-          <div className="hero-art"><div className="robot-aura"/><img src="/assets/pi-brain-robot.png" alt={t("coPilot")}/><div className="robot-orbit orbit-a"/><div className="robot-orbit orbit-b"/><div className="mascot-tag"><Sparkles size={14}/> {t("coPilot")}</div></div>
++          <div className="hero-art"><div className="robot-aura"/><div className="robot-figure"><img src="/assets/pi-brain-robot.png" alt={t("coPilot")}/><div className="mascot-tag"><Sparkles size={14}/> {t("coPilot")}</div></div><div className="robot-orbit orbit-a"/><div className="robot-orbit orbit-b"/></div>
+           <div className="hero-orb orb-one"/><div className="hero-orb orb-two"/><div className="hero-spark spark-a">✦</div><div className="hero-spark spark-b">✧</div><div className="hero-spark spark-c">✦</div>
+         </section>
+         <section className="stat-grid">
+diff --git a/src/theme.css b/src/theme.css
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -724,6 +724,11 @@
+   .app-shell .toast { transition: none !important; }
+ }
+ 
++/* Keep the desktop artwork and its caption as independent positioned children.
++   On phones the figure becomes a single group, so its caption can be precisely
++   centred below the robot regardless of writing direction. */
++.robot-figure { display: contents; }
++
+ /* -----------------------------------------------------------------------
+    Home hero on phones: desktop composition, content-driven card height.
+    The robot is a decoration, not a flex child, so it never stretches the
+@@ -740,7 +745,7 @@
+     justify-content: flex-start;
+     height: auto;
+     min-height: 0;
+-    padding: clamp(13px, 3.3vw, 19px) clamp(12px, 3.3vw, 19px);
++    padding: clamp(21px, 5vw, 29px) clamp(12px, 3.3vw, 19px);
+     isolation: isolate;
+     overflow: hidden;
+   }
+@@ -763,7 +768,7 @@
+     min-width: 0;
+     min-height: 0;
+     align-self: auto;
+-    gap: clamp(7px, 2vw, 10px);
++    gap: clamp(12px, 3.2vw, 16px);
+     padding: 0;
+     margin: 0;
+     border: 0;
+@@ -798,6 +803,7 @@
+     font-size: clamp(8px, 2.1vw, 10px);
+     line-height: 1.25;
+     letter-spacing: .2px;
++    margin-bottom: 2px;
+   }
+   .hero-copy h2 {
+     font-size: clamp(16px, 4.6vw, 25px);
+@@ -805,6 +811,7 @@
+     letter-spacing: -.45px;
+     overflow-wrap: normal;
+     word-break: normal;
++    margin-bottom: 2px;
+   }
+   /* The explicit <br> is the only English headline line break. */
+   html[lang^="en"] .hero-copy h2,
+@@ -815,6 +822,7 @@
+     line-height: 1.45;
+     max-width: 100%;
+     overflow-wrap: normal;
++    margin-bottom: 2px;
+   }
+ 
+   .hero-cta {
+@@ -825,9 +833,9 @@
+     width: max-content;
+     max-width: calc(100vw - 60px);
+     min-width: 0;
+-    min-height: 38px;
++    min-height: 39px;
+     margin: 0;
+-    padding: 9px clamp(7px, 2.2vw, 13px);
++    padding: 10px clamp(7px, 2.2vw, 13px);
+     gap: clamp(3px, 1vw, 6px);
+     font-size: clamp(9px, 2.5vw, 12px);
+     line-height: 1.1;
+@@ -839,8 +847,9 @@
+     display: flex;
+     flex-wrap: wrap;
+     align-items: center;
+-    gap: 5px 9px;
++    gap: 6px 10px;
+     font-size: clamp(8px, 2vw, 10px);
++    margin-top: 3px;
+   }
+   .hero-meta span { display: inline-flex; align-items: center; white-space: nowrap; }
+ 
+@@ -864,18 +873,35 @@
+     opacity: 1;
+     pointer-events: none;
+   }
++  /* The robot and label share the same measured box. Its end edge follows
++     the text direction while the tag stays centred under the image. */
++  .robot-figure {
++    position: relative;
++    display: flex;
++    flex: 0 0 70%;
++    flex-direction: column;
++    align-items: center;
++    justify-content: flex-end;
++    width: 70%;
++    height: 100%;
++    min-width: 0;
++    min-height: 0;
++    margin: 0;
++    padding: 0 0 4px;
++    pointer-events: none;
++  }
+   /* flex-end naturally flips between LTR/right and RTL/left. */
+   .hero-art img {
+     position: relative;
+     z-index: 1;
+     display: block;
+-    flex: 0 1 auto;
+-    width: auto;
+-    height: 96%;
+-    max-width: 70%;
+-    max-height: 96%;
++    flex: 1 1 auto;
++    width: 100%;
++    height: 0;
++    max-width: 100%;
++    max-height: none;
+     object-fit: contain;
+-    object-position: center;
++    object-position: center bottom;
+     margin: 0;
+     mix-blend-mode: normal;
+     filter: drop-shadow(0 10px 14px rgba(10,9,42,.35)) saturate(1.08);
+@@ -887,19 +913,23 @@
+   }
+   .robot-aura { width: 220px; height: 220px; }
+   .robot-orbit { width: 240px; height: 70px; top: 52%; }
+-  .mascot-tag {
+-    position: absolute;
++  .robot-figure .mascot-tag {
++    position: relative;
+     top: auto;
+     right: auto;
+     left: auto;
+-    bottom: 5px;
++    bottom: auto;
+     inset-inline-start: auto;
+-    inset-inline-end: 10px;
++    inset-inline-end: auto;
+     z-index: 2;
++    display: inline-flex;
++    flex: 0 0 auto;
++    align-self: center;
++    justify-content: center;
+     width: max-content;
+-    max-width: 66%;
++    max-width: 100%;
+     padding: 3px 5px;
+-    margin: 0;
++    margin: 1px 0 0;
+     border: 0;
+     border-radius: 0;
+     background: transparent;
+@@ -928,11 +958,11 @@
+   }
+ }
+ @media (max-width: 350px) {
+-  .hero-card { padding: 12px 10px; }
++  .hero-card { padding: 20px 10px 22px; }
+   .hero-copy { flex-basis: 73%; width: 73%; max-width: 73%; }
+   .hero-copy h2 { font-size: clamp(15px, 4.7vw, 17px); }
+-  .hero-art img { max-width: 71%; }
+-  .mascot-tag { inset-inline-end: 6px; }
++  .robot-figure { flex-basis: 71%; width: 71%; }
++  .robot-figure .mascot-tag { margin-inline: auto; }
+ }
+ @media (prefers-reduced-motion: reduce) {
+   .hero-art img { animation: none; }
