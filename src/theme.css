@@ -1661,3 +1661,123 @@ html[dir="ltr"] .app-shell .ranking-intro-trophy {
   .app-shell .profile-metrics.profile-metrics-expanded b { font-size: 18px; }
   .app-shell .profile-metrics.profile-metrics-expanded small { font-size: 9px; }
 }
+
+
+/* Full Experience Points labels and localized scoring help. */
+.app-shell .stat-grid-expanded .stat-xp-label {
+  display: block;
+  max-width: 100%;
+  font-size: clamp(8px, 2.2vw, 10px);
+  line-height: 1.2;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: normal;
+}
+.app-shell .profile-metrics-expanded .metric-xp-label {
+  display: block;
+  max-width: 100%;
+  font-size: clamp(7px, 1.9vw, 9px);
+  line-height: 1.15;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.app-shell .hero-meta .hero-scoring-rule {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 9px;
+  border: 1px solid var(--theme-line, rgba(177,153,255,.28));
+  border-radius: 999px;
+  color: var(--theme-text, #f7f3ff);
+  background: var(--theme-panel, rgba(126,86,255,.12));
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .035em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.app-shell .scoring-rules {
+  margin-top: 18px;
+  border: 1px solid var(--theme-line, rgba(177,153,255,.25));
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--theme-panel, rgba(255,255,255,.035));
+  box-shadow: 0 8px 22px rgba(5, 8, 28, .08);
+}
+.app-shell .scoring-rules > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 14px;
+  color: var(--theme-text, #f7f3ff);
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 750;
+}
+.app-shell .scoring-rules > summary::-webkit-details-marker { display: none; }
+.app-shell .scoring-rules > summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.app-shell .scoring-rules > summary > span svg { flex: 0 0 auto; color: var(--theme-gold, #ffd05b); }
+.app-shell .scoring-rules-chevron {
+  flex: 0 0 auto;
+  color: var(--theme-muted, #bdb8dc);
+  transition: transform .2s ease;
+}
+.app-shell .scoring-rules[open] .scoring-rules-chevron { transform: rotate(180deg); }
+.app-shell .scoring-rules-content {
+  display: grid;
+  gap: 9px;
+  padding: 0 14px 14px;
+  color: var(--theme-muted, #bdb8dc);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.app-shell .scoring-rules-content p { margin: 0; }
+.app-shell .scoring-rules-formula,
+.app-shell .scoring-rules-code {
+  width: fit-content;
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--theme-line, rgba(177,153,255,.25));
+  border-radius: 9px;
+  color: var(--theme-text, #f7f3ff);
+  background: var(--theme-panel2, rgba(126,86,255,.08));
+  font-size: 10px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.app-shell .scoring-rules-code {
+  color: var(--theme-gold, #ffd05b);
+  letter-spacing: .04em;
+}
+.app-shell[data-theme="light"] .scoring-rules {
+  background: #fff;
+  border-color: #d9e0ef;
+  box-shadow: 0 8px 22px rgba(41,51,89,.06);
+}
+.app-shell[data-theme="light"] .scoring-rules > summary { color: #1b2540; }
+.app-shell[data-theme="light"] .scoring-rules-content { color: #52617c; }
+.app-shell[data-theme="light"] .scoring-rules-formula,
+.app-shell[data-theme="light"] .scoring-rules-code {
+  background: #f2f5fc;
+  border-color: #d9e0ef;
+  color: #26324e;
+}
+.app-shell[data-theme="light"] .scoring-rules-code { color: #6242cd; }
+@media (max-width: 560px) {
+  .app-shell .stat-grid-expanded .stat-xp-label { font-size: 8px; }
+  .app-shell .profile-metrics-expanded .metric-xp-label { font-size: 7px; }
+  .app-shell .hero-meta .hero-scoring-rule { font-size: 9px; padding-inline: 7px; }
+  .app-shell .scoring-rules > summary { padding: 11px 12px; }
+  .app-shell .scoring-rules-content { padding: 0 12px 12px; font-size: 10px; }
+}

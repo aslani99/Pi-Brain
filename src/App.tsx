@@ -27,11 +27,13 @@ type LocalStats = {
   lastPlayedDate: string | null;
 };
 
+// A coherent starter snapshot for a fresh local profile:
+// 8 correct answers * 5 XP - 2 incorrect answers * 3 XP = 34 XP.
 const EMPTY_STATS: LocalStats = {
-  totalXp: 0,
-  totalAnswered: 0,
-  totalCorrect: 0,
-  dayStreak: 0,
+  totalXp: 34,
+  totalAnswered: 10,
+  totalCorrect: 8,
+  dayStreak: 1,
   lastPlayedDate: null
 };
 
@@ -71,17 +73,25 @@ function mapServerQuestion(item: ServerQuestion): Question {
 function readLocalStats(): LocalStats {
   try {
     const raw = localStorage.getItem("pi-brain-local-stats");
-    if (!raw) return EMPTY_STATS;
+    if (!raw) return { ...EMPTY_STATS };
     const parsed = JSON.parse(raw) as Partial<LocalStats>;
-    return {
+    const restored: LocalStats = {
       totalXp: Number.isFinite(parsed.totalXp) ? Math.max(0, Number(parsed.totalXp)) : 0,
       totalAnswered: Number.isFinite(parsed.totalAnswered) ? Math.max(0, Number(parsed.totalAnswered)) : 0,
       totalCorrect: Number.isFinite(parsed.totalCorrect) ? Math.max(0, Number(parsed.totalCorrect)) : 0,
       dayStreak: Number.isFinite(parsed.dayStreak) ? Math.max(0, Number(parsed.dayStreak)) : 0,
       lastPlayedDate: typeof parsed.lastPlayedDate === "string" ? parsed.lastPlayedDate : null
     };
+
+    // Upgrade only untouched all-zero local profiles. Any real progress is preserved.
+    const hasNoProgress = restored.totalXp === 0
+      && restored.totalAnswered === 0
+      && restored.totalCorrect === 0
+      && restored.dayStreak === 0
+      && restored.lastPlayedDate === null;
+    return hasNoProgress ? { ...EMPTY_STATS } : restored;
   } catch {
-    return EMPTY_STATS;
+    return { ...EMPTY_STATS };
   }
 }
 
@@ -112,6 +122,117 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   musicVolume: 0.20,
   reducedMotion: false,
 };
+
+const SCORING_COPY = {
+  en: {
+    xpLabel: "Experience Points",
+    rulesTitle: "How Experience Points are calculated",
+    correctRule: "Correct answer: +5 Experience Points.",
+    wrongRule: "Incorrect answer: −3 Experience Points. The deduction is limited to the points you currently have.",
+    minimumRule: "Your total can never fall below 0 Experience Points.",
+    starterRule: "New local profile starting values: 10 answered, 1-day streak, 8 correct, 2 incorrect, and 34 Experience Points.",
+    formula: "8 × 5 − 2 × 3 = 34 Experience Points."
+  },
+  fa: {
+    xpLabel: "امتیاز تجربه",
+    rulesTitle: "نحوه محاسبه امتیاز تجربه",
+    correctRule: "پاسخ درست: ۵ امتیاز تجربه اضافه می‌کند.",
+    wrongRule: "پاسخ نادرست: ۳ امتیاز تجربه کم می‌کند؛ کسر امتیاز بیشتر از موجودی فعلی نیست.",
+    minimumRule: "مجموع امتیاز تجربه هرگز کمتر از صفر نمی‌شود.",
+    starterRule: "مقادیر آغازین حساب محلی جدید: ۱۰ پاسخ ثبت‌شده، ۱ روز پیاپی، ۸ پاسخ درست، ۲ پاسخ نادرست و ۳۴ امتیاز تجربه.",
+    formula: "۸ × ۵ − ۲ × ۳ = ۳۴ امتیاز تجربه."
+  },
+  ar: {
+    xpLabel: "نقاط الخبرة",
+    rulesTitle: "كيفية احتساب نقاط الخبرة",
+    correctRule: "الإجابة الصحيحة: تضيف ٥ نقاط خبرة.",
+    wrongRule: "الإجابة الخاطئة: تخصم ٣ نقاط خبرة، ولا يتجاوز الخصم رصيدك الحالي.",
+    minimumRule: "لا يمكن أن ينخفض إجمالي نقاط الخبرة عن الصفر.",
+    starterRule: "القيم الأولية للحساب المحلي الجديد: ١٠ إجابات، وسلسلة يوم واحد، و٨ إجابات صحيحة، وإجابتان خاطئتان، و٣٤ نقطة خبرة.",
+    formula: "٨ × ٥ − ٢ × ٣ = ٣٤ نقطة خبرة."
+  },
+  de: {
+    xpLabel: "Erfahrungspunkte",
+    rulesTitle: "So werden Erfahrungspunkte berechnet",
+    correctRule: "Richtige Antwort: +5 Erfahrungspunkte.",
+    wrongRule: "Falsche Antwort: −3 Erfahrungspunkte. Es werden höchstens die aktuell vorhandenen Punkte abgezogen.",
+    minimumRule: "Dein Gesamtwert kann niemals unter 0 Erfahrungspunkte fallen.",
+    starterRule: "Startwerte eines neuen lokalen Profils: 10 beantwortete Fragen, 1-Tages-Serie, 8 richtige, 2 falsche Antworten und 34 Erfahrungspunkte.",
+    formula: "8 × 5 − 2 × 3 = 34 Erfahrungspunkte."
+  },
+  es: {
+    xpLabel: "Puntos de experiencia",
+    rulesTitle: "Cómo se calculan los puntos de experiencia",
+    correctRule: "Respuesta correcta: suma 5 puntos de experiencia.",
+    wrongRule: "Respuesta incorrecta: resta 3 puntos de experiencia, sin descontar más de los puntos disponibles.",
+    minimumRule: "El total nunca puede ser inferior a 0 puntos de experiencia.",
+    starterRule: "Valores iniciales de un perfil local nuevo: 10 respuestas, 1 día de racha, 8 correctas, 2 incorrectas y 34 puntos de experiencia.",
+    formula: "8 × 5 − 2 × 3 = 34 puntos de experiencia."
+  },
+  fr: {
+    xpLabel: "Points d’expérience",
+    rulesTitle: "Calcul des points d’expérience",
+    correctRule: "Bonne réponse : +5 points d’expérience.",
+    wrongRule: "Mauvaise réponse : −3 points d’expérience, sans retirer plus que le solde disponible.",
+    minimumRule: "Le total ne peut jamais être inférieur à 0 point d’expérience.",
+    starterRule: "Valeurs initiales d’un nouveau profil local : 10 réponses, 1 jour consécutif, 8 bonnes réponses, 2 mauvaises réponses et 34 points d’expérience.",
+    formula: "8 × 5 − 2 × 3 = 34 points d’expérience."
+  },
+  hi: {
+    xpLabel: "अनुभव अंक",
+    rulesTitle: "अनुभव अंकों की गणना कैसे होती है",
+    correctRule: "सही उत्तर: +5 अनुभव अंक।",
+    wrongRule: "गलत उत्तर: −3 अनुभव अंक। कटौती आपके मौजूदा अंकों से अधिक नहीं होगी।",
+    minimumRule: "कुल अनुभव अंक कभी भी 0 से कम नहीं होंगे।",
+    starterRule: "नए स्थानीय प्रोफ़ाइल के शुरुआती मान: 10 उत्तर, 1 दिन की स्ट्रीक, 8 सही, 2 गलत और 34 अनुभव अंक।",
+    formula: "8 × 5 − 2 × 3 = 34 अनुभव अंक।"
+  },
+  ja: {
+    xpLabel: "経験ポイント",
+    rulesTitle: "経験ポイントの計算方法",
+    correctRule: "正解：経験ポイントを5ポイント獲得します。",
+    wrongRule: "不正解：経験ポイントを3ポイント失います。減点は現在の保有ポイントが上限です。",
+    minimumRule: "経験ポイントの合計が0未満になることはありません。",
+    starterRule: "新しいローカルプロフィールの初期値：回答済み10問、連続記録1日、正解8問、不正解2問、経験ポイント34。",
+    formula: "8 × 5 − 2 × 3 = 経験ポイント34。"
+  },
+  pt: {
+    xpLabel: "Pontos de experiência",
+    rulesTitle: "Como os pontos de experiência são calculados",
+    correctRule: "Resposta correta: adiciona 5 pontos de experiência.",
+    wrongRule: "Resposta incorreta: remove 3 pontos de experiência, sem descontar mais do que o saldo disponível.",
+    minimumRule: "O total nunca pode ficar abaixo de 0 pontos de experiência.",
+    starterRule: "Valores iniciais de um novo perfil local: 10 respostas, sequência de 1 dia, 8 corretas, 2 incorretas e 34 pontos de experiência.",
+    formula: "8 × 5 − 2 × 3 = 34 pontos de experiência."
+  },
+  ru: {
+    xpLabel: "Очки опыта",
+    rulesTitle: "Как рассчитываются очки опыта",
+    correctRule: "Правильный ответ: +5 очков опыта.",
+    wrongRule: "Неправильный ответ: −3 очка опыта. Списание не может превышать текущий баланс.",
+    minimumRule: "Общее количество очков опыта не может быть меньше 0.",
+    starterRule: "Начальные значения нового локального профиля: 10 ответов, серия 1 день, 8 правильных, 2 неправильных ответа и 34 очка опыта.",
+    formula: "8 × 5 − 2 × 3 = 34 очка опыта."
+  },
+  tr: {
+    xpLabel: "Deneyim Puanı",
+    rulesTitle: "Deneyim puanları nasıl hesaplanır?",
+    correctRule: "Doğru cevap: +5 deneyim puanı kazandırır.",
+    wrongRule: "Yanlış cevap: 3 deneyim puanı düşürür; kesinti mevcut puanınızı aşamaz.",
+    minimumRule: "Toplam deneyim puanınız hiçbir zaman 0'ın altına düşmez.",
+    starterRule: "Yeni yerel profilin başlangıç değerleri: 10 cevaplanan soru, 1 günlük seri, 8 doğru, 2 yanlış ve 34 deneyim puanı.",
+    formula: "8 × 5 − 2 × 3 = 34 deneyim puanı."
+  },
+  zh: {
+    xpLabel: "经验值",
+    rulesTitle: "经验值如何计算",
+    correctRule: "回答正确：增加 5 点经验值。",
+    wrongRule: "回答错误：扣除 3 点经验值，但扣除量不会超过当前余额。",
+    minimumRule: "经验值总数不会低于 0。",
+    starterRule: "新本地账户的初始值：已答 10 题、连续 1 天、答对 8 题、答错 2 题，经验值为 34。",
+    formula: "8 × 5 − 2 × 3 = 34 点经验值。"
+  }
+} as const;
 
 function readLocalPreferences(cacheKey = PREFERENCES_CACHE_KEY): UserPreferences {
   try {
@@ -148,6 +269,8 @@ function readLocalPreferences(cacheKey = PREFERENCES_CACHE_KEY): UserPreferences
 
 export default function App() {
   const { t, i18n } = useTranslation();
+  const scoringLocale = normalizeLocale(i18n.language).split("-")[0] as keyof typeof SCORING_COPY;
+  const scoringCopy = SCORING_COPY[scoringLocale] ?? SCORING_COPY.en;
   const [view, setView] = useState<"home"|"quiz"|"result"|"rankings"|"discover"|"profile">("home");
   const [sessionQuestions, setSessionQuestions] = useState<Question[]>(questions);
   const [availableCategories, setAvailableCategories] = useState<typeof categories>([]);
@@ -738,13 +861,13 @@ export default function App() {
       {view==="home"&&<motion.div key="home" className="page" initial={{opacity:0,scale:.965,y:28,filter:"blur(8px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} exit={{opacity:0,scale:.985,y:-18,filter:"blur(6px)"}} transition={{type:"spring",stiffness:250,damping:25}}>
         <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/>{t("welcome")}</div><h1>{t("greeting")}</h1><p className="muted">{t("subtitle")}</p></div><div className="level-pill"><Sparkles size={15}/>{t("level")}</div></div>
         <section className="hero-card">
-          <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">{t("liveQuest")}</span></div><h2>{t("heroTitleLine1")}<br/><span>{t("heroTitleLine2")}</span></h2><p>{t("heroDescription")}</p><motion.button className="primary-button hero-cta" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> {t("minutes")}</span><span><CircleHelp size={14}/> {t("stageBasedQuiz")}</span><span><Star size={14}/> +5 / −3 XP</span></div></div>
+          <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">{t("liveQuest")}</span></div><h2>{t("heroTitleLine1")}<br/><span>{t("heroTitleLine2")}</span></h2><p>{t("heroDescription")}</p><motion.button className="primary-button hero-cta" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> {t("minutes")}</span><span><CircleHelp size={14}/> {t("stageBasedQuiz")}</span><span className="hero-scoring-rule" dir="ltr">XP -3 / +5</span></div></div>
           <div className="hero-art"><div className="robot-aura"/><div className="robot-figure"><img src="/assets/pi-brain-robot.png" alt="" aria-hidden="true"/></div><div className="robot-orbit orbit-a"/><div className="robot-orbit orbit-b"/></div>
           <div className="hero-orb orb-one"/><div className="hero-orb orb-two"/><div className="hero-spark spark-a">✦</div><div className="hero-spark spark-b">✧</div><div className="hero-spark spark-c">✦</div>
         </section>
         <section className="stat-grid stat-grid-expanded" aria-label={t("yourProgress")}>
           <div className="stat-card"><div className="stat-icon streak"><Flame size={18}/></div><div><strong>{shownStreak} <small>{t("streak")}</small></strong><span>{t("keepSparkAlive")}</span></div></div>
-          <div className="stat-card"><div className="stat-icon points"><Star size={18}/></div><div><strong>{shownXp.toLocaleString()} <small>{t("points")}</small></strong><span>{t("curiosityAddsUp")}</span></div></div>
+          <div className="stat-card"><div className="stat-icon points"><Star size={18}/></div><div><strong>{shownXp.toLocaleString()} <small className="stat-xp-label">{scoringCopy.xpLabel}</small></strong><span>{t("curiosityAddsUp")}</span></div></div>
           <div className="stat-card"><div className="stat-icon answered"><Check size={18}/></div><div><strong>{shownAnswered}</strong><span>{t("questions")}</span></div></div>
           <div className="stat-card"><div className="stat-icon correct"><CheckCircle2 size={18}/></div><div><strong>{shownCorrect}</strong><span>{t("correctAnswersStat")}</span></div></div>
           <div className="stat-card"><div className="stat-icon incorrect"><X size={18}/></div><div><strong>{shownWrong}</strong><span>{t("wrongAnswersStat")}</span></div></div>
@@ -772,7 +895,7 @@ export default function App() {
 
       {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("globalCommunity")}</div><h1>{t("leaderboard")}</h1><p className="muted ranking-intro"><Trophy className="ranking-intro-trophy" aria-hidden="true" size={56}/><span>{t("leaderboardTop10")}</span></p><div className="panel ranking-panel" dir="ltr">{participantCountBanner}<div className="leaderboard-entries" dir="ltr">{liveLeaderboard.slice(0, 10).map(renderLeaderboardRow)}</div>{leaderboardStatus}</div><p className="demo-note"><Trophy size={14}/> {t("leaderboardPublicNote")}</p></motion.div>}
 
-      {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("yourSpace")}</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2 dir="auto">{piProfile?.username || t("guestExplorer")}</h2><span className="muted">{piProfile ? t("piIdentityVerified") : t("connectPiIdentity")}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> {t("verifiedWithPi")}</div>}<div className="profile-metrics profile-metrics-expanded"><div><b>{shownXp.toLocaleString()}</b><small>XP</small></div><div><b>{shownStreak}</b><small>{t("dayStreakLabel")}</small></div><div><b>{shownAnswered}</b><small>{t("answeredLabel")}</small></div><div><b>{shownCorrect}</b><small>{t("correctAnswersStat")}</small></div><div><b>{shownWrong}</b><small>{t("wrongAnswersStat")}</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={() => signInWithPi()} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?t("connecting"):t("signInWithPi")}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?t("openPiBrowser"):t("backendSetup")}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> {t("piUidSaved")}</div><button className="text-button centered" onClick={() => signOutPi()}>{t("signOutSession")}</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div><section className="panel profile-settings" aria-label={t("themes")}><div className="profile-settings-heading"><Palette size={20}/><div><h2>{t("settings")}</h2><p className="muted">{t("personalizeAppearance")}</p></div></div><div className="profile-audio-settings" role="group" aria-label={t("audioSettingsTitle")}>
+      {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("yourSpace")}</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2 dir="auto">{piProfile?.username || t("guestExplorer")}</h2><span className="muted">{piProfile ? t("piIdentityVerified") : t("connectPiIdentity")}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> {t("verifiedWithPi")}</div>}<div className="profile-metrics profile-metrics-expanded"><div><b>{shownXp.toLocaleString()}</b><small className="metric-xp-label">{scoringCopy.xpLabel}</small></div><div><b>{shownStreak}</b><small>{t("dayStreakLabel")}</small></div><div><b>{shownAnswered}</b><small>{t("answeredLabel")}</small></div><div><b>{shownCorrect}</b><small>{t("correctAnswersStat")}</small></div><div><b>{shownWrong}</b><small>{t("wrongAnswersStat")}</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={() => signInWithPi()} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?t("connecting"):t("signInWithPi")}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?t("openPiBrowser"):t("backendSetup")}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> {t("piUidSaved")}</div><button className="text-button centered" onClick={() => signOutPi()}>{t("signOutSession")}</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div><section className="panel profile-settings" aria-label={t("themes")}><div className="profile-settings-heading"><Palette size={20}/><div><h2>{t("settings")}</h2><p className="muted">{t("personalizeAppearance")}</p></div></div><div className="profile-audio-settings" role="group" aria-label={t("audioSettingsTitle")}>
     <button type="button" className="profile-audio-toggle" aria-pressed={soundOn} onClick={toggleSound}>
       <span className="profile-audio-toggle-label">{soundOn ? <Volume2 size={18}/> : <VolumeX size={18}/>}<span>{t("soundEffectsSetting")}</span></span>
       <span className={`profile-audio-switch ${soundOn ? "is-on" : ""}`} aria-hidden="true"/>
@@ -793,7 +916,7 @@ export default function App() {
         onChange={(event) => changeMusicVolume(Number(event.currentTarget.value))}
         aria-valuetext={`${Math.round(musicVolume * 100)}%`}/>
     </div>
-  </div><div className="profile-quiz-language"><label htmlFor="quiz-language-select">{t("quizLanguage")}</label><select id="quiz-language-select" value={quizLanguage} onChange={(event)=>void changeQuizLanguage(event.target.value)}>{localeOptions.map(([code,label])=><option key={code} value={code}>{label}</option>)}</select><p className="muted">{t("quizLanguageHelp")}</p></div><h3>{t("chooseTheme")}</h3><div className="profile-theme-grid">{themes.map((item)=><button type="button" key={item.id} className={`profile-theme-choice ${theme===item.id ? "active" : ""}`} aria-pressed={theme===item.id} onClick={()=>changeTheme(item.id)}><span className="theme-swatches">{item.colors.map((color,j)=><i key={j} style={{background:color}}/>)}</span><span className="theme-name"><b>{t(`theme${item.id[0].toUpperCase()}${item.id.slice(1)}`)}</b><small>{item.mode==="light"?t("lightMode"):t("darkMode")}</small></span>{theme===item.id&&<CheckCircle2 size={17}/>}</button>)}</div><button type="button" className="theme-motion-toggle profile-motion-toggle" onClick={()=>setReducedMotion(value=>!value)} aria-pressed={reducedMotion}>{t("reduceMotion")}<span>{reducedMotion ? t("on") : t("off")}</span></button></section></motion.div>}
+  </div><div className="profile-quiz-language"><label htmlFor="quiz-language-select">{t("quizLanguage")}</label><select id="quiz-language-select" value={quizLanguage} onChange={(event)=>void changeQuizLanguage(event.target.value)}>{localeOptions.map(([code,label])=><option key={code} value={code}>{label}</option>)}</select><p className="muted">{t("quizLanguageHelp")}</p></div><h3>{t("chooseTheme")}</h3><div className="profile-theme-grid">{themes.map((item)=><button type="button" key={item.id} className={`profile-theme-choice ${theme===item.id ? "active" : ""}`} aria-pressed={theme===item.id} onClick={()=>changeTheme(item.id)}><span className="theme-swatches">{item.colors.map((color,j)=><i key={j} style={{background:color}}/>)}</span><span className="theme-name"><b>{t(`theme${item.id[0].toUpperCase()}${item.id.slice(1)}`)}</b><small>{item.mode==="light"?t("lightMode"):t("darkMode")}</small></span>{theme===item.id&&<CheckCircle2 size={17}/>}</button>)}</div><button type="button" className="theme-motion-toggle profile-motion-toggle" onClick={()=>setReducedMotion(value=>!value)} aria-pressed={reducedMotion}>{t("reduceMotion")}<span>{reducedMotion ? t("on") : t("off")}</span></button><details className="scoring-rules"><summary><span><Star size={16}/>{scoringCopy.rulesTitle}</span><ChevronDown size={17} className="scoring-rules-chevron"/></summary><div className="scoring-rules-content"><p>{scoringCopy.correctRule}</p><p>{scoringCopy.wrongRule}</p><p>{scoringCopy.minimumRule}</p><p>{scoringCopy.starterRule}</p><div className="scoring-rules-formula" dir="ltr">{scoringCopy.formula}</div><div className="scoring-rules-code" dir="ltr">XP -3 / +5</div></div></details></section></motion.div>}
       </AnimatePresence>
     </main>
 
