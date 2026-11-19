@@ -1,5 +1,11 @@
 const base = { translation: { greeting: "थोड़ी जिज्ञासा नई दुनिया खोलती है।", subtitle: "आपकी रोज़ की खोज यहीं से शुरू होती है।", daily: "आज की चुनौती", start: "आज का क्विज़ शुरू करें", continue: "अपनी लय बनाए रखें", categories: "अपनी रुचि से खोजें", seeAll: "सभी देखें", leaderboard: "वैश्विक लीडरबोर्ड", yourProgress: "आपकी प्रगति", streak: "लगातार दिन", points: "अंक", questions: "उत्तर दिए गए प्रश्न", home: "होम", discover: "खोजें", rankings: "रैंकिंग", profile: "प्रोफ़ाइल", question: "प्रश्न", of: "में से", next: "जारी रखें", check: "उत्तर जाँचें", correct: "शानदार! सही उत्तर।", incorrect: "अच्छी कोशिश! कुछ नया सीखें।", explanation: "मुख्य विचार", finish: "परिणाम देखें", playAgain: "एक और राउंड", back: "होम पर वापस", choose: "सबसे अच्छा उत्तर चुनें", languages: "भाषा", welcome: "वापस स्वागत है", level: "जिज्ञासु खोजकर्ता" }};
 const additional = {
+    heroDescriptionCompact: "आपका साथी तैयार है!",
+    leaderboardCountPrefix: "अब तक",
+    leaderboardCountSuffix: "लोग शामिल हुए हैं",
+    winnerTrophyLabel: "प्रथम स्थान की ट्रॉफी",
+    leaderboardTop10: "XP के आधार पर शीर्ष 10 सत्यापित Pi उपयोगकर्ता।",
+    leaderboardPublicNote: "XP के आधार पर शीर्ष 10 सत्यापित Pi उपयोगकर्ता।",
     audioSettingsTitle: "ऑडियो सेटिंग्स",
     soundEffectsSetting: "क्लिक और ध्वनि प्रभाव",
     backgroundMusicSetting: "बैकग्राउंड संगीत",

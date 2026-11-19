@@ -1336,3 +1336,88 @@ html[dir="rtl"] .hero-card .robot-figure > img { scale: 1 1; }
     bottom: calc(75px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+
+/* Top-ten leaderboard: distinct first-place trophy and real participant count. */
+.app-shell .leaderboard-participant-count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 6px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 4px auto 15px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--theme-purple, #a78bfa) 30%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-purple, #a78bfa) 11%, transparent);
+  color: var(--text, #eeeaff);
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.app-shell .leaderboard-participant-count strong {
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--theme-purple, #b9a6ff);
+}
+.app-shell[data-theme="light"] .leaderboard-participant-count {
+  color: #3b365a;
+  border-color: #d9d0ee;
+  background: #f3edff;
+}
+.app-shell[data-theme="light"] .leaderboard-participant-count strong { color: #6642b3; }
+.app-shell .leader-row .rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 44px;
+  flex-shrink: 0;
+}
+.app-shell .rank-winner-trophy {
+  color: #f8c94c;
+  stroke-width: 2.4;
+  filter: drop-shadow(0 1px 3px rgba(240, 179, 36, .4));
+}
+@media (max-width: 560px) {
+  /* Do not allow the description to cross into the mascot. The short copy
+     is intentionally rewritten for this narrower column in all languages. */
+  .app-shell .hero-card .hero-copy p {
+    width: clamp(94px, 30vw, 150px);
+    min-width: 0;
+    max-width: clamp(94px, 30vw, 150px);
+    font-size: 10px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-wrap: pretty;
+  }
+  .app-shell .hero-card .hero-description-mobile {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+    overflow-wrap: break-word;
+    word-break: normal;
+    white-space: normal;
+    text-wrap: balance;
+  }
+  .app-shell .hero-description-mobile .hero-description-line {
+    display: inline;
+    white-space: normal;
+  }
+  .app-shell .leader-row .rank { min-width: 35px; gap: 3px; }
+  .app-shell .rank-winner-trophy { width: 14px; height: 14px; }
+}
+
+.app-shell .feedback-xp { display: inline-flex; align-items: center; margin-top: 7px; font-weight: 800; font-size: 12px; }
+.app-shell .feedback-xp-positive { color: #41db9e; }
+.app-shell .feedback-xp-negative { color: #ff8693; }
+.app-shell[data-theme="light"] .feedback-xp-positive { color: #137c57; }
+.app-shell[data-theme="light"] .feedback-xp-negative { color: #b8374b; }

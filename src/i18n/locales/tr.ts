@@ -11,6 +11,12 @@ const base = { translation: {
     welcome: "Tekrar hoş geldin", level: "Meraklı kaşif"
   }};
 const additional = {
+    heroDescriptionCompact: "Yol arkadaşın hazır!",
+    leaderboardCountPrefix: "Şimdiye kadar",
+    leaderboardCountSuffix: "kişi katıldı",
+    winnerTrophyLabel: "Birincilik kupası",
+    leaderboardTop10: "XP’ye göre doğrulanmış ilk 10 Pi kullanıcısı.",
+    leaderboardPublicNote: "XP puanına göre ilk 10 doğrulanmış Pi kullanıcısı.",
     audioSettingsTitle: "Ses ayarları",
     soundEffectsSetting: "Tıklama ve efekt sesleri",
     backgroundMusicSetting: "Arka plan müziği",

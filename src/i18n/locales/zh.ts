@@ -1,5 +1,11 @@
 const base = { translation: { greeting: "一点好奇心，开启更大的世界。", subtitle: "每日探索，从这里开始。", daily: "每日挑战", start: "开始今日答题", continue: "保持连续挑战", categories: "按兴趣探索", seeAll: "查看全部", leaderboard: "全球排行榜", yourProgress: "你的进度", streak: "连续天数", points: "积分", questions: "已答题目", home: "首页", discover: "探索", rankings: "排行", profile: "个人资料", question: "问题", of: "共", next: "继续", check: "检查答案", correct: "太棒了！回答正确。", incorrect: "不错的尝试！学到新知识了。", explanation: "核心知识", finish: "查看结果", playAgain: "再来一轮", back: "返回首页", choose: "选择最佳答案", languages: "语言", welcome: "欢迎回来", level: "好奇探索者" }};
 const additional = {
+    heroDescriptionCompact: "你的探索伙伴已就绪！",
+    leaderboardCountPrefix: "目前已有",
+    leaderboardCountSuffix: "人参与",
+    winnerTrophyLabel: "第一名奖杯",
+    leaderboardTop10: "按 XP 排名的前 10 位 Pi 认证用户。",
+    leaderboardPublicNote: "前 10 位 Pi 认证用户的 XP 排名。",
     audioSettingsTitle: "音频设置",
     soundEffectsSetting: "点击音效",
     backgroundMusicSetting: "背景音乐",

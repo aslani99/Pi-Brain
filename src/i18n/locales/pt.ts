@@ -1,5 +1,11 @@
 const base = { translation: { greeting: "Um pouco de curiosidade abre novos mundos.", subtitle: "Sua dose diária de descobertas começa aqui.", daily: "DESAFIO DIÁRIO", start: "Começar o quiz de hoje", continue: "Mantenha sua sequência", categories: "Explore por curiosidade", seeAll: "Ver tudo", leaderboard: "Ranking global", yourProgress: "Seu progresso", streak: "dias seguidos", points: "pontos", questions: "perguntas respondidas", home: "Início", discover: "Descobrir", rankings: "Ranking", profile: "Perfil", question: "PERGUNTA", of: "DE", next: "Continuar", check: "Conferir resposta", correct: "Muito bem! Correto.", incorrect: "Boa tentativa! Aprenda algo novo.", explanation: "A GRANDE IDEIA", finish: "Ver resultado", playAgain: "Outra rodada", back: "Voltar", choose: "Escolha a melhor resposta", languages: "Idioma", welcome: "Bem-vindo de volta", level: "Explorador curioso" }};
 const additional = {
+    heroDescriptionCompact: "Seu copiloto está pronto!",
+    leaderboardCountPrefix: "Até agora,",
+    leaderboardCountSuffix: "pessoas participaram",
+    winnerTrophyLabel: "Troféu de primeiro lugar",
+    leaderboardTop10: "Os 10 usuários Pi verificados com mais XP.",
+    leaderboardPublicNote: "Os 10 melhores usuários Pi verificados por XP.",
     audioSettingsTitle: "Configurações de áudio",
     soundEffectsSetting: "Sons de clique e efeitos",
     backgroundMusicSetting: "Música de fundo",

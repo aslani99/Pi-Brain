@@ -11,6 +11,12 @@ const base = { translation: {
     languages: "اللغة", welcome: "مرحبًا بعودتك", level: "مستكشف المعرفة"
   }};
 const additional = {
+    heroDescriptionCompact: "رفيقك جاهز. اكتشف الجديد!",
+    leaderboardCountPrefix: "حتى الآن انضم",
+    leaderboardCountSuffix: "مشاركًا",
+    winnerTrophyLabel: "كأس المركز الأول",
+    leaderboardTop10: "أفضل ١٠ مستخدمين موثّقين في Pi حسب مجموع النقاط.",
+    leaderboardPublicNote: "ترتيب أفضل ١٠ مستخدمين موثّقين بحسب النقاط.",
     audioSettingsTitle: "إعدادات الصوت",
     soundEffectsSetting: "أصوات النقر والمؤثرات",
     backgroundMusicSetting: "موسيقى الخلفية",

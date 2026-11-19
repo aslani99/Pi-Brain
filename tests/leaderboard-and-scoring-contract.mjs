@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const read = (file) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+
+test("rankings select ten verified profiles and return a real count", () => {
+  const api = read("supabase/functions/leaderboard/index.ts");
+  assert.match(api, /\.limit\(10\)/);
+  assert.match(api, /count: "exact", head: true/);
+  assert.match(api, /participant_count: participants\.count/);
+});
+
+test("server grades a wrong answer by at most three XP, never negative", () => {
+  const sql = read("supabase/migrations/20261119150000_wrong_answer_minus_three_xp.sql");
+  assert.match(sql, /v_points := case when v_correct then 15 else -least\(v_profile\.total_xp, 3\)::integer end/);
+  assert.match(sql, /greatest\(0, total_xp \+ v_points\)/);
+  assert.match(sql, /check \(points_awarded >= -3\)/);
+  assert.match(sql, /for update/);
+  for (const starting of [0, 1, 2, 3, 5, 99]) {
+    const debit = Math.min(3, starting);
+    const ending = Math.max(0, starting - debit);
+    assert.equal(ending, Math.max(0, starting - 3));
+  }
+});
+
+test("local fallback scoring and result displays match total XP", () => {
+  const app = read("src/App.tsx");
+  assert.match(app, /Math\.max\(0, stats\.totalXp \+ \(isCorrect \? 15 : -3\)\)/);
+  assert.match(app, /stats\.totalXp\.toLocaleString\(\)\} XP/);
+  assert.match(app, /participantCountBanner/);
+  assert.match(app, /rank-winner-trophy/);
+});
+
+test("all supported languages have participant count and compact description", () => {
+  for (const lang of ["en", "fa", "ar", "de", "es", "fr", "ru", "tr", "hi", "zh", "ja", "pt"]) {
+    const text = read(`src/i18n/locales/${lang}.ts`);
+    for (const key of ["leaderboardTop10", "leaderboardCountPrefix", "leaderboardCountSuffix", "heroDescriptionCompact", "winnerTrophyLabel"]) {
+      assert.equal((text.match(new RegExp(`\\b${key}:`, "g")) ?? []).length, 1, `${lang}: ${key}`);
+    }
+  }
+});

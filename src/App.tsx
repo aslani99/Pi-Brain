@@ -159,6 +159,7 @@ export default function App() {
   const [selected, setSelected] = useState<number|null>(null);
   const [checked, setChecked] = useState(false);
   const [score, setScore] = useState(0);
+  const [lastPointsDelta, setLastPointsDelta] = useState<number | null>(null);
   const [languageOpen, setLanguageOpen] = useState(false);
   // Interface language and quiz-content language are independent preferences.
   const [quizLanguage, setQuizLanguage] = useState(() => readLocalPreferences().quizLanguage);
@@ -191,6 +192,7 @@ export default function App() {
   const [remoteFeedback, setRemoteFeedback] = useState<{ questionId: string; correct: boolean; answerIndex: number; explanation: string } | null>(null);
   const [answerSubmitting, setAnswerSubmitting] = useState(false);
   const [liveLeaderboard, setLiveLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [participantCount, setParticipantCount] = useState<number | null>(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
   const [leaderboardError, setLeaderboardError] = useState(false);
   const [leaderboardReload, setLeaderboardReload] = useState(0);
@@ -232,20 +234,23 @@ export default function App() {
     setLeaderboardError(false);
     if (!isBackendConfigured()) {
       setLiveLeaderboard([]);
+      setParticipantCount(null);
       setLeaderboardError(true);
       setLeaderboardLoading(false);
       return;
     }
     void fetchLeaderboard()
-      .then(({ entries }) => {
+      .then(({ entries, participant_count }) => {
         if (active && requestId === leaderboardRequestRef.current) {
-          setLiveLeaderboard(entries);
+          setLiveLeaderboard(entries.slice(0, 10));
+          setParticipantCount(participant_count);
         }
       })
       .catch(() => {
         if (active && requestId === leaderboardRequestRef.current) {
           setLeaderboardError(true);
           setLiveLeaderboard([]);
+          setParticipantCount(null);
         }
       })
       .finally(() => {
@@ -256,12 +261,20 @@ export default function App() {
 
   const renderLeaderboardRow = (entry: LeaderboardEntry) => (
     <div className="leader-row" key={entry.rank}>
-      <span className={`rank rank-${entry.rank}`} dir="ltr">{entry.rank}</span>
+      <span className={`rank rank-${entry.rank}`} dir="ltr">{entry.rank}{entry.rank === 1 && <Trophy className="rank-winner-trophy" size={17} aria-label={t("winnerTrophyLabel")}/>}</span>
       <span className="leader-avatar" aria-hidden="true">{entry.username?.charAt(0)?.toUpperCase() || "?"}</span>
       <b className="leader-username" dir="auto">{entry.username}</b>
       <span className="leader-points" dir="ltr">{entry.total_xp.toLocaleString()} XP</span>
     </div>
   );
+
+  const participantCountBanner = !leaderboardLoading && !leaderboardError && participantCount !== null ? (
+    <div className="leaderboard-participant-count" role="status">
+      <span>{t("leaderboardCountPrefix")}</span>
+      <strong dir="ltr">{participantCount.toLocaleString(normalizeLocale(i18n.language))}</strong>
+      <span>{t("leaderboardCountSuffix")}</span>
+    </div>
+  ) : null;
 
   const leaderboardStatus = leaderboardLoading
     ? <p className="muted" role="status">{t("leaderboardLoading")}</p>
@@ -602,6 +615,7 @@ export default function App() {
         const result = await submitServerAnswer(piAccessToken, remoteSessionId, current.id, selected);
         setRemoteFeedback({ questionId: current.id, correct: result.correct, answerIndex: result.answer_index, explanation: result.explanation });
         setChecked(true);
+        setLastPointsDelta(result.points_awarded);
         setScore(result.score);
         if (result.completed) {
           // A retry can report an already-completed session with stage_advanced=false.
@@ -630,6 +644,7 @@ export default function App() {
     }
 
     const isCorrect = selected === current.answer;
+    setLastPointsDelta(isCorrect ? 15 : -Math.min(3, stats.totalXp));
     setChecked(true);
     if (isCorrect) { setScore(s=>s+1); if (soundOn) playUiSound("success"); }
     else if (soundOn) playUiSound("wrong");
@@ -639,7 +654,7 @@ export default function App() {
       ? stats.dayStreak
       : stats.lastPlayedDate === previousDayKey() ? stats.dayStreak + 1 : 1;
     const nextStats: LocalStats = {
-      totalXp: stats.totalXp + (isCorrect ? 15 : 0),
+      totalXp: Math.max(0, stats.totalXp + (isCorrect ? 15 : -3)),
       totalAnswered: stats.totalAnswered + 1,
       totalCorrect: stats.totalCorrect + (isCorrect ? 1 : 0),
       dayStreak: nextStreak,
@@ -715,7 +730,7 @@ export default function App() {
       {view==="home"&&<motion.div key="home" className="page" initial={{opacity:0,scale:.965,y:28,filter:"blur(8px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} exit={{opacity:0,scale:.985,y:-18,filter:"blur(6px)"}} transition={{type:"spring",stiffness:250,damping:25}}>
         <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/>{t("welcome")}</div><h1>{t("greeting")}</h1><p className="muted">{t("subtitle")}</p></div><div className="level-pill"><Sparkles size={15}/>{t("level")}</div></div>
         <section className="hero-card">
-          <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">{t("liveQuest")}</span></div><h2>{t("heroTitleLine1")}<br/><span>{t("heroTitleLine2")}</span></h2><p><span className="hero-description-desktop">{t("heroDescription")}</span><span className="hero-description-mobile">{normalizeLocale(i18n.language) === "fa" && t("heroDescription").includes("پرسش‌های") ? <><span className="hero-description-line">{t("heroDescription").split("پرسش‌های")[0]}پرسش‌های</span><span className="hero-description-line">{t("heroDescription").split("پرسش‌های").slice(1).join("پرسش‌های").trimStart()}</span></> : t("heroDescription")}</span></p><motion.button className="primary-button hero-cta" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> {t("minutes")}</span><span><CircleHelp size={14}/> {t("stageBasedQuiz")}</span><span><Star size={14}/> +120 XP</span></div></div>
+          <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">{t("liveQuest")}</span></div><h2>{t("heroTitleLine1")}<br/><span>{t("heroTitleLine2")}</span></h2><p><span className="hero-description-desktop">{t("heroDescription")}</span><span className="hero-description-mobile">{t("heroDescriptionCompact")}</span></p><motion.button className="primary-button hero-cta" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> {t("minutes")}</span><span><CircleHelp size={14}/> {t("stageBasedQuiz")}</span><span><Star size={14}/> +15 / −3 XP</span></div></div>
           <div className="hero-art"><div className="robot-aura"/><div className="robot-figure"><img src="/assets/pi-brain-robot.png" alt="" aria-hidden="true"/></div><div className="robot-orbit orbit-a"/><div className="robot-orbit orbit-b"/></div>
           <div className="hero-orb orb-one"/><div className="hero-orb orb-two"/><div className="hero-spark spark-a">✦</div><div className="hero-spark spark-b">✧</div><div className="hero-spark spark-c">✦</div>
         </section>
@@ -727,7 +742,7 @@ export default function App() {
         <section className="section-block"><div className="section-heading"><div><div className="eyebrow">{t("findNextSpark")}</div><h3>{t("categories")}</h3></div><button className="text-button" onClick={()=>setView("discover")}>{t("seeAll")} <ChevronRight size={15}/></button></div>
           <div className="category-grid">{availableCategories.length === 0 ? <div className="muted quiz-bank-empty"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p><button type="button" className="text-button" onClick={()=>void changeQuizLanguage("en")}>{t("switchQuizToEnglish")}</button></div> : availableCategories.slice(0,4).map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18,delay:i*.055}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div>
         </section>
-        <section className="bottom-grid"><div className="panel leaderboard-preview"><div className="section-heading"><div><div className="eyebrow">{t("globalCommunity")}</div><h3>{t("leaderboard")}</h3></div><button className="text-button" onClick={()=>setView("rankings")}>{t("seeAll")} <ChevronRight size={15}/></button></div>{liveLeaderboard.slice(0,3).map(renderLeaderboardRow)}{leaderboardStatus}</div>
+        <section className="bottom-grid"><div className="panel leaderboard-preview"><div className="section-heading"><div><div className="eyebrow">{t("globalCommunity")}</div><h3>{t("leaderboard")}</h3></div><button className="text-button" onClick={()=>setView("rankings")}>{t("seeAll")} <ChevronRight size={15}/></button></div>{participantCountBanner}{liveLeaderboard.slice(0,3).map(renderLeaderboardRow)}{leaderboardStatus}</div>
           <div className="panel progress-panel"><div className="eyebrow">{t("yourJourney")}</div><h3>{t("yourProgress")}</h3><div className="progress-ring"><div><strong>{stats.totalAnswered ? Math.round(stats.totalCorrect / stats.totalAnswered * 100) : 0}%</strong><small>{t("accuracy")}</small></div></div><p className="muted">{stats.totalAnswered ? t("progressSummary", { correct: stats.totalCorrect, total: stats.totalAnswered }) : t("firstAnswerProgress")}</p></div></section>
       </motion.div>}
 
@@ -736,16 +751,16 @@ export default function App() {
         <div className="quiz-stage-meta"><span>{t("stageNumber", { stage: quizMeta?.stage ?? 1 })}</span><span>{t("questionCount", { count: quizMeta?.questionCount ?? sessionQuestions.length })}</span><span>{quizMeta?.difficulty === "demo" ? t("demoMode") : localizeDifficulty((quizMeta?.difficulty ?? current.difficulty) as Question["difficulty"], i18n.language)}</span></div><div className="progress-track"><motion.div className="progress-fill" animate={{width:`${progress}%`}}/></div>
         <AnimatePresence mode="wait"><motion.div key={current.id} className="quiz-card" initial={{opacity:0,x:36,scale:.97,filter:"blur(6px)"}} animate={{opacity:1,x:0,scale:1,filter:"blur(0px)"}} exit={{opacity:0,x:-28,scale:.98,filter:"blur(5px)"}} transition={{type:"spring",stiffness:260,damping:24}}><div className="quiz-mascot-chip"><img src="/assets/pi-brain-robot.png" alt=""/><span>{t("readyWhen")}</span><Sparkles size={13}/></div><div className="quiz-tags"><span className="tag">{localizeCategory(current.category, i18n.language)}</span><span className="tag subtle">{localizeDifficulty(current.difficulty, i18n.language)}</span></div><div className="question-number">0{qIndex+1}</div><h2 dir="auto">{current.prompt}</h2><p className="muted">{t("choose")}</p>
           <div className="answer-list">{current.options.map((option,i)=>{const correctIndex = remoteSessionId ? (remoteFeedback?.questionId===current.id ? remoteFeedback.answerIndex : -1) : current.answer; return <motion.button key={option} onClick={()=>chooseAnswer(i)} disabled={checked || answerSubmitting} className={`answer-option ${selected===i?"chosen":""} ${checked&&i===correctIndex?"right":""} ${checked&&selected===i&&i!==correctIndex?"wrong":""}`} whileTap={{scale:.975,x:3}} animate={{scale:selected===i?1.015:1}} transition={{type:"spring",stiffness:440,damping:23}}><span className="answer-letter" dir="ltr">{String.fromCharCode(65+i)}</span><span dir="auto">{option}</span>{checked&&i===correctIndex&&<Check size={18}/>}</motion.button>})}</div>
-          <AnimatePresence>{checked&&<motion.div className={`feedback ${(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?"success":"try-again"}`} initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}}><b>{(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?t("correct"):t("incorrect")}</b>{(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)&&<div className="mini-celebration">✦ +15 XP <Sparkles size={13}/> {t("niceWork")}</div>}<p dir="auto">{remoteSessionId ? remoteFeedback?.explanation : current.explanation}</p><span className="feedback-label"><Lightbulb size={14}/>{t("explanation")}</span></motion.div>}</AnimatePresence>
+          <AnimatePresence>{checked&&<motion.div className={`feedback ${(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?"success":"try-again"}`} initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}}><b>{(remoteFeedback?.questionId===current.id ? remoteFeedback.correct : selected===current.answer)?t("correct"):t("incorrect")}</b>{lastPointsDelta !== null && <div className={`feedback-xp ${lastPointsDelta < 0 ? "feedback-xp-negative" : "feedback-xp-positive"}`} dir="ltr">{lastPointsDelta > 0 ? "+" : ""}{lastPointsDelta} XP</div>}<p dir="auto">{remoteSessionId ? remoteFeedback?.explanation : current.explanation}</p><span className="feedback-label"><Lightbulb size={14}/>{t("explanation")}</span></motion.div>}</AnimatePresence>
           {!checked?<motion.button className="primary-button full" disabled={selected===null || answerSubmitting} onClick={checkAnswer} whileHover={{scale:1.015,y:-2}} whileTap={{scale:.96,y:2}} transition={{type:"spring",stiffness:420,damping:18}}>{answerSubmitting?t("savingAnswer"):t("check")}<ChevronRight size={17}/></motion.button>:<motion.button className="primary-button full" onClick={nextQuestion} disabled={questionLoading} whileHover={{scale:1.015,y:-2}} whileTap={{scale:.96,y:2}} transition={{type:"spring",stiffness:420,damping:18}}>{questionLoading ? t("loadingQuestion") : qIndex===(quizMeta?.questionCount ?? sessionQuestions.length)-1?t("finish"):t("next")}<ChevronRight size={17}/></motion.button>}
         </motion.div></AnimatePresence>
       </motion.div>}
 
-      {view==="result"&&<motion.div key="result" className="result-page" initial={{opacity:0,scale:.82,y:24,rotateX:8}} animate={{opacity:1,scale:1,y:0,rotateX:0}} transition={{type:"spring",stiffness:220,damping:18}} exit={{opacity:0,scale:.92,y:-18,filter:"blur(6px)"}}><div className="result-mascot"><img src="/assets/pi-brain-robot.png" alt={t("mascotCelebrating")}/><div className="result-glow"><Award size={38}/></div></div><div className="eyebrow">{t("dailyChallengeComplete")}</div><h1>{t("resultHeadline")}</h1><p className="muted">{t("resultDescription")}</p><div className="result-score"><strong>{score}</strong><span>{t("scoreOfQuestions", { score, total: quizMeta?.questionCount ?? sessionQuestions.length })}</span></div><div className="result-stats"><div><Star/><b>{score*15} XP</b><small>{t("earnedToday")}</small></div><div><Activity/><b>{Math.round(score/Math.max(quizMeta?.questionCount ?? sessionQuestions.length,1)*100)}%</b><small>{t("accuracy")}</small></div><div><Flame/><b>{t("oneDay")}</b><small>{t("streakProgress")}</small></div></div><motion.button className="primary-button" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}}>{t("playAgain")}<ChevronRight size={17}/></motion.button><button className="text-button centered" onClick={()=>setView("home")}>{t("back")}</button></motion.div>}
+      {view==="result"&&<motion.div key="result" className="result-page" initial={{opacity:0,scale:.82,y:24,rotateX:8}} animate={{opacity:1,scale:1,y:0,rotateX:0}} transition={{type:"spring",stiffness:220,damping:18}} exit={{opacity:0,scale:.92,y:-18,filter:"blur(6px)"}}><div className="result-mascot"><img src="/assets/pi-brain-robot.png" alt={t("mascotCelebrating")}/><div className="result-glow"><Award size={38}/></div></div><div className="eyebrow">{t("dailyChallengeComplete")}</div><h1>{t("resultHeadline")}</h1><p className="muted">{t("resultDescription")}</p><div className="result-score"><strong>{score}</strong><span>{t("scoreOfQuestions", { score, total: quizMeta?.questionCount ?? sessionQuestions.length })}</span></div><div className="result-stats"><div><Star/><b>{stats.totalXp.toLocaleString()} XP</b><small>{t("points")}</small></div><div><Activity/><b>{Math.round(score/Math.max(quizMeta?.questionCount ?? sessionQuestions.length,1)*100)}%</b><small>{t("accuracy")}</small></div><div><Flame/><b>{t("oneDay")}</b><small>{t("streakProgress")}</small></div></div><motion.button className="primary-button" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}}>{t("playAgain")}<ChevronRight size={17}/></motion.button><button className="text-button centered" onClick={()=>setView("home")}>{t("back")}</button></motion.div>}
 
       {view==="discover"&&<motion.div key="discover" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("worldOfIdeas")}</div><h1>{t("categories")}</h1><p className="muted">{t("discoverLead")}</p><div className="category-grid discover-grid">{availableCategories.length === 0 && <div className="muted quiz-bank-empty"><p>{t("questionBankEmptyForLocale", { locale: quizLanguage.toUpperCase() })}</p><button type="button" className="text-button" onClick={()=>void changeQuizLanguage("en")}>{t("switchQuizToEnglish")}</button></div>}<motion.button className="category-card violet" onClick={()=>{if (availableCategories.length) void startQuiz(); else setToast(t("questionBankEmpty"));}} disabled={availableCategories.length===0} whileHover={{y:-7,scale:1.025}} whileTap={{scale:.94}}><span className="category-icon"><Shuffle size={22}/></span><b>{t("randomQuestions")}</b><small>{t("approvedCategories")}</small><small>{t("stageNumber", { stage: randomStage })}</small><span className="category-arrow"><ChevronRight size={15}/></span></motion.button>{availableCategories.map((c,i)=>{const Icon=iconMap[c.icon] ?? BrainCircuit;return <motion.button className={`category-card ${c.color}`} key={c.name} onClick={()=>startQuiz(c.name)} initial={{opacity:0,y:18,scale:.9}} animate={{opacity:1,y:0,scale:1}} whileHover={{y:-7,rotateX:4,scale:1.025}} whileTap={{scale:.94,rotateZ:-1.5}} transition={{type:"spring",stiffness:360,damping:18}}><span className="category-icon"><Icon size={22}/></span><b>{localizeCategory(c.name, i18n.language)}</b><small>{localizeCategoryDescription(c.name, i18n.language, c.desc)}</small><small>{t("stageNumber", { stage: categoryStages[c.name] ?? 1 })}</small><span className="category-arrow"><ChevronRight size={15}/></span><span className="category-sheen"/></motion.button>})}</div></motion.div>}
 
-      {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("globalCommunity")}</div><h1>{t("leaderboard")}</h1><p className="muted">{t("leaderboardTop100")}</p><div className="panel ranking-panel">{liveLeaderboard.map(renderLeaderboardRow)}{leaderboardStatus}</div><p className="demo-note"><Trophy size={14}/> {t("leaderboardPublicNote")}</p></motion.div>}
+      {view==="rankings"&&<motion.div key="rankings" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("globalCommunity")}</div><h1>{t("leaderboard")}</h1><p className="muted">{t("leaderboardTop10")}</p><div className="panel ranking-panel">{participantCountBanner}{liveLeaderboard.slice(0, 10).map(renderLeaderboardRow)}{leaderboardStatus}</div><p className="demo-note"><Trophy size={14}/> {t("leaderboardPublicNote")}</p></motion.div>}
 
       {view==="profile"&&<motion.div key="profile" className="page" initial={{opacity:0,scale:.97,y:26,filter:"blur(7px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} transition={{type:"spring",stiffness:240,damping:24}} exit={{opacity:0,scale:.97,y:-18,filter:"blur(5px)"}}><div className="eyebrow">{t("yourSpace")}</div><h1>{t("profile")}</h1><div className="panel profile-panel"><div className="profile-avatar">{piProfile?.username?.charAt(0)?.toUpperCase() || "G"}</div><h2 dir="auto">{piProfile?.username || t("guestExplorer")}</h2><span className="muted">{piProfile ? t("piIdentityVerified") : t("connectPiIdentity")}</span>{piProfile&&<div className="pi-verified-pill"><CheckCircle2 size={14}/> {t("verifiedWithPi")}</div>}<div className="profile-metrics"><div><b>{(piProfile?.total_xp ?? stats.totalXp).toLocaleString()}</b><small>XP</small></div><div><b>{piProfile?.day_streak ?? stats.dayStreak}</b><small>{t("dayStreakLabel")}</small></div><div><b>{piProfile?.total_answered ?? stats.totalAnswered}</b><small>{t("answeredLabel")}</small></div></div>{!piProfile?<><motion.button className="primary-button pi-connect-button" onClick={() => signInWithPi()} disabled={piAuthBusy} whileTap={{scale:.97}}>{piAuthBusy?t("connecting"):t("signInWithPi")}<ChevronRight size={17}/></motion.button><div className="demo-note"><LockKeyhole size={14}/> {isBackendConfigured()?t("openPiBrowser"):t("backendSetup")}</div></>:<><div className="demo-note"><CheckCircle2 size={14}/> {t("piUidSaved")}</div><button className="text-button centered" onClick={() => signOutPi()}>{t("signOutSession")}</button></>}{piAuthMessage&&<p className="auth-message" role="status">{piAuthMessage}</p>}</div><section className="panel profile-settings" aria-label={t("themes")}><div className="profile-settings-heading"><Palette size={20}/><div><h2>{t("settings")}</h2><p className="muted">{t("personalizeAppearance")}</p></div></div><div className="profile-audio-settings" role="group" aria-label={t("audioSettingsTitle")}>
     <button type="button" className="profile-audio-toggle" aria-pressed={soundOn} onClick={toggleSound}>

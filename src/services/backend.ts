@@ -88,7 +88,7 @@ export function verifyPiOnBackend(accessToken: string, locale: string) {
 }
 
 // Rankings are public and read-only; other endpoints still require a verified Pi token.
-export async function fetchLeaderboard(): Promise<{ entries: LeaderboardEntry[] }> {
+export async function fetchLeaderboard(): Promise<{ entries: LeaderboardEntry[]; participant_count: number }> {
   if (!isBackendConfigured()) throw new Error("Backend is not configured.");
   const response = await fetch(`${supabaseUrl}/functions/v1/leaderboard`, {
     method: "POST",
@@ -96,9 +96,11 @@ export async function fetchLeaderboard(): Promise<{ entries: LeaderboardEntry[] 
     body: "{}",
   });
   if (!response.ok) throw new Error(`Leaderboard request failed (${response.status}).`);
-  const payload = await response.json() as { entries?: LeaderboardEntry[] };
-  if (!Array.isArray(payload.entries)) throw new Error("Invalid leaderboard response.");
-  return { entries: payload.entries };
+  const payload = await response.json() as { entries?: LeaderboardEntry[]; participant_count?: number };
+  if (!Array.isArray(payload.entries) || !Number.isSafeInteger(payload.participant_count) || (payload.participant_count ?? -1) < 0) {
+    throw new Error("Invalid leaderboard response.");
+  }
+  return { entries: payload.entries.slice(0, 10), participant_count: payload.participant_count! };
 }
 
 export function fetchQuizCatalog(accessToken: string, locale: string) {

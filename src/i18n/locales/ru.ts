@@ -1,5 +1,11 @@
 const base = { translation: { greeting: "Немного любопытства открывает большие миры.", subtitle: "Ежедневные открытия начинаются здесь.", daily: "ЕЖЕДНЕВНЫЙ ВЫЗОВ", start: "Начать сегодняшний квиз", continue: "Продолжайте серию", categories: "Исследуйте по интересам", seeAll: "Показать все", leaderboard: "Мировой рейтинг", yourProgress: "Ваш прогресс", streak: "дней подряд", points: "баллов", questions: "отвечено вопросов", home: "Главная", discover: "Открытия", rankings: "Рейтинг", profile: "Профиль", question: "ВОПРОС", of: "ИЗ", next: "Далее", check: "Проверить ответ", correct: "Отлично! Верно.", incorrect: "Хорошая попытка! Вот новое знание.", explanation: "ГЛАВНАЯ МЫСЛЬ", finish: "Мой результат", playAgain: "Ещё раунд", back: "На главную", choose: "Выберите лучший ответ", languages: "Язык", welcome: "С возвращением", level: "Исследователь" }};
 const additional = {
+    heroDescriptionCompact: "Твой помощник готов!",
+    leaderboardCountPrefix: "Сейчас участвуют",
+    leaderboardCountSuffix: "человек",
+    winnerTrophyLabel: "Кубок за первое место",
+    leaderboardTop10: "10 лучших подтверждённых пользователей Pi по XP.",
+    leaderboardPublicNote: "10 лучших подтверждённых пользователей по XP.",
     audioSettingsTitle: "Настройки звука",
     soundEffectsSetting: "Звуки нажатий и эффекты",
     backgroundMusicSetting: "Фоновая музыка",
