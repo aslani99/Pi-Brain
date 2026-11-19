@@ -1423,46 +1423,50 @@ html[dir="rtl"] .hero-card .robot-figure > img { scale: 1 1; }
 .app-shell[data-theme="light"] .feedback-xp-negative { color: #b8374b; }
 
 
-/* Keep the full localized hero description, not a shortened replacement.
-   On phones, give it a dedicated bottom line area inside the hero card,
-   outside the mascot's image bounds. No text clipping or line clamping. */
+/* Keep the complete translation in the natural content sequence:
+   headline -> description -> CTA. The paragraph shares the headline's
+   text column and does not get positioned along the card's bottom edge. */
 @media (max-width: 560px) {
   .app-shell .hero-card {
-    min-height: 306px;
-    align-items: flex-start;
-    padding-bottom: 89px;
+    min-height: 0;
+    align-items: center;
+    padding-bottom: clamp(21px, 5vw, 29px);
   }
   .app-shell .hero-card .hero-copy {
-    position: static;
+    position: relative;
+  }
+  .app-shell .hero-card .hero-copy > h2,
+  .app-shell .hero-card .hero-copy > p {
+    width: 100%;
+    max-width: 100%;
   }
   .app-shell .hero-card .hero-copy > p {
-    position: absolute;
-    inset-inline-start: 15px;
-    inset-inline-end: 15px;
-    bottom: 14px;
+    position: relative;
+    inset-inline-start: auto;
+    inset-inline-end: auto;
+    bottom: auto;
     top: auto;
     z-index: 3;
     display: block;
-    width: auto;
+    width: 100%;
     min-width: 0;
-    max-width: none;
+    max-width: 100%;
     max-height: none;
-    margin: 0;
+    margin: 0 0 2px;
     padding: 0;
     overflow: visible;
     white-space: normal;
     overflow-wrap: break-word;
     word-break: normal;
-    text-wrap: pretty;
+    text-wrap: balance;
     font-size: clamp(9px, 2.65vw, 11px);
     line-height: 1.42;
     text-align: start;
   }
-  /* Reserve the lower band for copy instead of enlarging the mascot
-     to fill the extra card height. The image's side position is preserved. */
+  /* Restore the mascot sizing from before the bottom-description layout. */
   .app-shell .hero-card .hero-art .robot-figure {
-    height: clamp(210px, 45vw, 244px);
-    max-height: calc(100% - 92px);
+    height: calc(100% - 10px);
+    max-height: none;
     width: auto;
     max-width: 82%;
   }
