@@ -853,7 +853,7 @@ export default function App() {
   }}>
     <header className="topbar">
       <button className="brand" onClick={()=>setView("home")} aria-label={t("brandHomeLabel")}>
-        <span className="brand-mark"><img src={`${import.meta.env.BASE_URL}pi-brain-logo.png`} alt="" width="32" height="32" /></span><span>pi<span className="brand-accent">brain</span></span><span className="brand-beta">{t("cosmicQuiz")}</span>
+        <span className="brand-mark" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}pi-brain-logo.png`} alt="" width="36" height="36" /></span><span className="brand-wordmark" dir="ltr"><span className="brand-initial">B</span><span className="brand-wordmark-rest">rain<span className="brand-accent">Quiz</span></span></span><span className="brand-beta">{t("cosmicQuiz")}</span>
       </button>
       <nav className="desktop-nav">{navItems.map(n=><motion.button key={n.id} className={view===n.id?"nav-link active":"nav-link"} onClick={()=>setView(n.id)} whileTap={{scale:.9}} transition={{type:"spring",stiffness:500,damping:20}}><n.icon size={17}/>{n.label}</motion.button>)}</nav>
       <div className="top-actions">

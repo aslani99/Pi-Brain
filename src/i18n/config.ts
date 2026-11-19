@@ -91,10 +91,10 @@ async function loadLocale(locale: SupportedLocale): Promise<void> {
 function applyDocumentLocale(locale: SupportedLocale): void {
   const title = i18n.getResource(locale, "translation", "documentTitle")
     ?? i18n.getResource("en", "translation", "documentTitle")
-    ?? "Pi Brain";
+    ?? "BrainQuiz";
   const description = i18n.getResource(locale, "translation", "documentDescription")
     ?? i18n.getResource("en", "translation", "documentDescription")
-    ?? "Pi Brain";
+    ?? "BrainQuiz";
   document.documentElement.lang = locale;
   document.documentElement.dir = localeDirection(locale);
   document.title = String(title);

@@ -43,14 +43,42 @@ body::before {
   border-bottom-color: rgba(166, 132, 255, .2);
   box-shadow: 0 8px 30px rgba(2, 0, 20, .25);
 }
-.brand { letter-spacing: -.9px; }
-.brand-mark {
-  color: #fff;
-  background: linear-gradient(145deg, #a967ff 0%, #6545ff 48%, #2acff7 100%);
-  box-shadow: 0 0 0 1px rgba(255,255,255,.22) inset, 0 0 26px rgba(137, 82, 255, .55);
-  animation: brand-pulse 3.2s ease-in-out infinite;
+/* BrainQuiz wordmark: the capital B is intentionally taller than the
+   remaining letters. A fixed LTR island prevents reversal in Persian/Arabic. */
+.brand { letter-spacing: -.9px; flex-shrink: 0; gap: 8px; white-space: nowrap; }
+.brand-wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-weight: 800;
+  letter-spacing: -.055em;
+  line-height: 1;
 }
-@keyframes brand-pulse { 50% { box-shadow: 0 0 0 1px rgba(255,255,255,.3) inset, 0 0 38px rgba(137,82,255,.78); } }
+.brand-initial {
+  display: inline-block;
+  font-size: 1.22em;
+  line-height: .84;
+  margin-right: .012em;
+}
+.brand-wordmark-rest { display: inline-block; }
+@media (max-width: 420px) {
+  .brand { font-size: clamp(17px, 5vw, 22px); gap: 6px; }
+  .brand-mark { width: 32px; height: 32px; min-width: 32px; }
+}
+.brand-mark {
+  background: transparent;
+  border-radius: 50%;
+  box-shadow: none;
+  animation: none;
+  overflow: visible;
+}
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 .brand-accent { color: var(--gold); }
 .brand-beta { margin-inline-start: 2px; padding: 4px 7px; border-radius: 7px; font-size: 8px; letter-spacing: 1.25px; color: #d7cbff; background: rgba(132, 86, 255, .16); border: 1px solid rgba(174, 141, 255, .25); }
 .nav-link, .icon-button { color: #c4c0e1; transition: background .2s ease, color .2s ease, box-shadow .2s ease; }
