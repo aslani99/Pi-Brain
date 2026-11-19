@@ -86,6 +86,21 @@ function readLocalStats(): LocalStats {
 }
 
 const PREFERENCES_CACHE_KEY = "pi-brain-preferences-v1";
+// The last volume chosen on this device must survive refreshes, account
+// restoration, and delayed server preference updates.
+const MUSIC_VOLUME_CACHE_KEY = "pi-brain-music-volume-v2";
+function readSavedMusicVolume(): number | null {
+  try {
+    const raw = localStorage.getItem(MUSIC_VOLUME_CACHE_KEY);
+    if (raw === null) return null;
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+  } catch { return null; }
+}
+function rememberMusicVolume(value: number): void {
+  try { localStorage.setItem(MUSIC_VOLUME_CACHE_KEY, String(value)); }
+  catch { /* Keep the session control working if local storage is blocked. */ }
+}
 const preferencesCacheKey = (piUid?: string | null) =>
   piUid ? `${PREFERENCES_CACHE_KEY}:${piUid}` : PREFERENCES_CACHE_KEY;
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -165,7 +180,7 @@ export default function App() {
   }, [toast]);
   const [soundOn, setSoundOn] = useState(() => readLocalPreferences().soundEnabled);
   const [musicOn, setMusicOn] = useState(() => readLocalPreferences().musicEnabled);
-  const [musicVolume, setMusicVolume] = useState(() => readLocalPreferences().musicVolume ?? 0.20);
+  const [musicVolume, setMusicVolume] = useState(() => readSavedMusicVolume() ?? readLocalPreferences().musicVolume ?? 0.20);
   const [stats, setStats] = useState<LocalStats>(readLocalStats);
   const [piProfile, setPiProfile] = useState<PiVerifiedProfile | null>(null);
   const [piAccessToken, setPiAccessToken] = useState<string | null>(null);
@@ -369,7 +384,7 @@ export default function App() {
         setTheme(themes.some((item) => item.id === restored.theme) ? restored.theme : "cosmic");
         setSoundOn(restored.soundEnabled);
         setMusicOn(restored.musicEnabled ?? true);
-        setMusicVolume(typeof restored.musicVolume === "number" ? Math.min(1, Math.max(0, restored.musicVolume)) : 0.20);
+        setMusicVolume(readSavedMusicVolume() ?? (typeof restored.musicVolume === "number" ? Math.min(1, Math.max(0, restored.musicVolume)) : 0.20));
         setReducedMotion(restored.reducedMotion);
         setPreferencesHydrated(true);
       } catch (preferenceError) {
@@ -473,8 +488,8 @@ export default function App() {
             setTheme(themes.some((item) => item.id === latest.preferences.theme) ? latest.preferences.theme : "cosmic");
             setSoundOn(latest.preferences.soundEnabled);
             setMusicOn(latest.preferences.musicEnabled ?? true);
-            setMusicVolume(typeof latest.preferences.musicVolume === "number"
-              ? Math.min(1, Math.max(0, latest.preferences.musicVolume)) : 0.20);
+            setMusicVolume(readSavedMusicVolume() ?? (typeof latest.preferences.musicVolume === "number"
+              ? Math.min(1, Math.max(0, latest.preferences.musicVolume)) : 0.20));
             setReducedMotion(latest.preferences.reducedMotion);
             setToast(t("settingsRestoredFromAnotherDevice"));
           } catch {
@@ -521,6 +536,12 @@ export default function App() {
   };
   const toggleSound = () => setSoundOn((enabled) => !enabled);
   const toggleMusic = () => setMusicOn((enabled) => !enabled);
+  const changeMusicVolume = (percent: number) => {
+    const next = Math.min(100, Math.max(0, Math.round(percent))) / 100;
+    rememberMusicVolume(next); // Write immediately, not after an async server response.
+    setAmbientMusicVolume(next); // Changes are also audible during an active quiz.
+    setMusicVolume(next);
+  };
 
   // Keep the actual audio gain synchronized even while a quiz is already playing.
   useEffect(() => { setAmbientMusicVolume(musicVolume); }, [musicVolume]);
@@ -744,7 +765,7 @@ export default function App() {
       </label>
       <input id="background-music-volume" type="range" min="0" max="100" step="1"
         value={Math.round(musicVolume * 100)}
-        onChange={(event) => setMusicVolume(Number(event.currentTarget.value) / 100)}
+        onChange={(event) => changeMusicVolume(Number(event.currentTarget.value))}
         aria-valuetext={`${Math.round(musicVolume * 100)}%`}/>
     </div>
   </div><div className="profile-quiz-language"><label htmlFor="quiz-language-select">{t("quizLanguage")}</label><select id="quiz-language-select" value={quizLanguage} onChange={(event)=>void changeQuizLanguage(event.target.value)}>{localeOptions.map(([code,label])=><option key={code} value={code}>{label}</option>)}</select><p className="muted">{t("quizLanguageHelp")}</p></div><h3>{t("chooseTheme")}</h3><div className="profile-theme-grid">{themes.map((item)=><button type="button" key={item.id} className={`profile-theme-choice ${theme===item.id ? "active" : ""}`} aria-pressed={theme===item.id} onClick={()=>changeTheme(item.id)}><span className="theme-swatches">{item.colors.map((color,j)=><i key={j} style={{background:color}}/>)}</span><span className="theme-name"><b>{t(`theme${item.id[0].toUpperCase()}${item.id.slice(1)}`)}</b><small>{item.mode==="light"?t("lightMode"):t("darkMode")}</small></span>{theme===item.id&&<CheckCircle2 size={17}/>}</button>)}</div><button type="button" className="theme-motion-toggle profile-motion-toggle" onClick={()=>setReducedMotion(value=>!value)} aria-pressed={reducedMotion}>{t("reduceMotion")}<span>{reducedMotion ? t("on") : t("off")}</span></button></section></motion.div>}

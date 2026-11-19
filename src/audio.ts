@@ -8,6 +8,14 @@ let ambientStarted = false;
 let musicVolume = 0.20;
 const SFX_VOLUME = 0.9;
 
+// The UI's volume percentage is independent from the phone's volume control.
+// A gentle squared taper gives music a genuinely quiet 20% setting: 0.20² =
+// 0.04 of the original signal amplitude, before the phone's master volume.
+function musicGainForSetting(setting: number): number {
+  const normalized = Math.max(0, Math.min(1, setting));
+  return normalized * normalized;
+}
+
 function getContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
   const AudioContextClass = window.AudioContext;
@@ -138,7 +146,7 @@ function connectAmbientAudio(ctx: AudioContext, audio: HTMLAudioElement) {
     // Use an actual gain node: iOS may ignore HTMLAudioElement.volume entirely.
     const source = ambientSource ?? ctx.createMediaElementSource(audio);
     const gain = ambientGain ?? ctx.createGain();
-    gain.gain.setValueAtTime(musicVolume, ctx.currentTime);
+    gain.gain.setValueAtTime(musicGainForSetting(musicVolume), ctx.currentTime);
     if (!ambientSource) source.connect(gain);
     if (!ambientGain) gain.connect(ctx.destination);
     ambientSource = source;
@@ -146,7 +154,7 @@ function connectAmbientAudio(ctx: AudioContext, audio: HTMLAudioElement) {
     audio.volume = 1; // The Web Audio node, not the media element, controls the volume.
   } catch {
     // Fallback for older embedded browsers without MediaElementAudioSourceNode.
-    audio.volume = musicVolume;
+    audio.volume = musicGainForSetting(musicVolume);
   }
 }
 
@@ -154,9 +162,9 @@ export function setAmbientMusicVolume(value: number) {
   if (!Number.isFinite(value)) return;
   musicVolume = Math.min(1, Math.max(0, value));
   if (ambientGain && audioContext) {
-    ambientGain.gain.setTargetAtTime(musicVolume, audioContext.currentTime, 0.012);
+    ambientGain.gain.setTargetAtTime(musicGainForSetting(musicVolume), audioContext.currentTime, 0.025);
   } else if (ambientAudio) {
-    ambientAudio.volume = musicVolume;
+    ambientAudio.volume = musicGainForSetting(musicVolume);
   }
 }
 
@@ -166,7 +174,9 @@ export function startAmbientMusic() {
   if (!audio) return;
 
   if (ctx) connectAmbientAudio(ctx, audio);
-  else audio.volume = musicVolume;
+  else audio.volume = musicGainForSetting(musicVolume);
+  // Reapply the saved setting before every quiz session, including resumes.
+  setAmbientMusicVolume(musicVolume);
 
   if (ambientStarted && !audio.paused) return;
   ambientStarted = true;
