@@ -3,6 +3,7 @@ const additional = {
     audioSettingsTitle: "音频设置",
     soundEffectsSetting: "点击音效",
     backgroundMusicSetting: "背景音乐",
+    musicVolumeSetting: "音乐音量",
     quizLanguageHelp: "选择测验题目的语言。此设置独立于界面语言。",
     questionBankEmptyForLocale: "测验语言 {{locale}} 暂无已批准的类别。界面语言可以与测验语言不同。",
     switchQuizToEnglish: "使用英语显示测验题目",

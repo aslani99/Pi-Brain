@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { Activity, Atom, Award, BrainCircuit, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Cpu, Flame, Globe2, Home, Languages, Leaf, Lightbulb, LockKeyhole, Palette, Play, Sparkles, Star, Trophy, UserRound, X, Orbit, Shapes, Volume2, VolumeX, Music2, Sun, CheckCircle2, Shuffle } from "lucide-react";
 import i18n, { applyLocale, localeOptions, normalizeLocale } from "./i18n/config";
 import { hasQuestionTranslation, localizeCategory, localizeCategoryDescription, localizeDifficulty, localizeQuestion } from "./i18n/question-translations";
 import { categories, questions, type Question } from "./data";
-import { playUiSound, startAmbientMusic, stopAmbientMusic } from "./audio";
+import { playUiSound, setAmbientMusicVolume, startAmbientMusic, stopAmbientMusic } from "./audio";
 import { authenticatePiUser, isPiSdkAvailable } from "./services/pi";
 import { fetchLeaderboard, fetchNextServerQuestion, fetchQuizCatalog, isBackendConfigured, startServerQuiz, submitServerAnswer, type LeaderboardEntry, type PiVerifiedProfile, type ServerQuestion, type UserPreferences, fetchUserPreferences, saveUserPreferences } from "./services/backend";
 
@@ -94,6 +94,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   theme: "cosmic",
   soundEnabled: true,
   musicEnabled: true,
+  musicVolume: 0.20,
   reducedMotion: false,
 };
 
@@ -121,6 +122,8 @@ function readLocalPreferences(cacheKey = PREFERENCES_CACHE_KEY): UserPreferences
       theme: themes.some((item) => item.id === value.theme) ? value.theme! : "cosmic",
       soundEnabled: typeof value.soundEnabled === "boolean" ? value.soundEnabled : true,
       musicEnabled: typeof value.musicEnabled === "boolean" ? value.musicEnabled : true,
+      musicVolume: typeof value.musicVolume === "number" && Number.isFinite(value.musicVolume)
+        ? Math.min(1, Math.max(0, value.musicVolume)) : 0.20,
       reducedMotion: typeof value.reducedMotion === "boolean" ? value.reducedMotion : false,
     };
   } catch {
@@ -162,6 +165,7 @@ export default function App() {
   }, [toast]);
   const [soundOn, setSoundOn] = useState(() => readLocalPreferences().soundEnabled);
   const [musicOn, setMusicOn] = useState(() => readLocalPreferences().musicEnabled);
+  const [musicVolume, setMusicVolume] = useState(() => readLocalPreferences().musicVolume ?? 0.20);
   const [stats, setStats] = useState<LocalStats>(readLocalStats);
   const [piProfile, setPiProfile] = useState<PiVerifiedProfile | null>(null);
   const [piAccessToken, setPiAccessToken] = useState<string | null>(null);
@@ -365,6 +369,7 @@ export default function App() {
         setTheme(themes.some((item) => item.id === restored.theme) ? restored.theme : "cosmic");
         setSoundOn(restored.soundEnabled);
         setMusicOn(restored.musicEnabled ?? true);
+        setMusicVolume(typeof restored.musicVolume === "number" ? Math.min(1, Math.max(0, restored.musicVolume)) : 0.20);
         setReducedMotion(restored.reducedMotion);
         setPreferencesHydrated(true);
       } catch (preferenceError) {
@@ -419,6 +424,7 @@ export default function App() {
       theme,
       soundEnabled: soundOn,
       musicEnabled: musicOn,
+      musicVolume,
       reducedMotion,
     };
     if (piProfile && !preferencesHydrated) return;
@@ -426,7 +432,7 @@ export default function App() {
       localStorage.setItem(preferencesCacheKey(piProfile?.pi_uid), JSON.stringify(preferences));
     }
     catch { /* The in-memory settings remain usable if storage is unavailable. */ }
-  }, [i18n.language, quizLanguage, theme, soundOn, musicOn, reducedMotion, piProfile?.pi_uid, preferencesHydrated]);
+  }, [i18n.language, quizLanguage, theme, soundOn, musicOn, musicVolume, reducedMotion, piProfile?.pi_uid, preferencesHydrated]);
 
   useEffect(() => {
     const retryWhenOnline = () => setSyncRetry((value) => value + 1);
@@ -446,6 +452,7 @@ export default function App() {
       theme,
       soundEnabled: soundOn,
       musicEnabled: musicOn,
+      musicVolume,
       reducedMotion,
     };
     const timeout = window.setTimeout(async () => {
@@ -466,6 +473,8 @@ export default function App() {
             setTheme(themes.some((item) => item.id === latest.preferences.theme) ? latest.preferences.theme : "cosmic");
             setSoundOn(latest.preferences.soundEnabled);
             setMusicOn(latest.preferences.musicEnabled ?? true);
+            setMusicVolume(typeof latest.preferences.musicVolume === "number"
+              ? Math.min(1, Math.max(0, latest.preferences.musicVolume)) : 0.20);
             setReducedMotion(latest.preferences.reducedMotion);
             setToast(t("settingsRestoredFromAnotherDevice"));
           } catch {
@@ -477,7 +486,7 @@ export default function App() {
       }
     }, 650);
     return () => window.clearTimeout(timeout);
-  }, [piAccessToken, preferencesHydrated, syncRetry, i18n.language, quizLanguage, theme, soundOn, musicOn, reducedMotion]);
+  }, [piAccessToken, preferencesHydrated, syncRetry, i18n.language, quizLanguage, theme, soundOn, musicOn, musicVolume, reducedMotion]);
 
   useEffect(() => {
     if (piRestoreAttempted.current) return;
@@ -512,6 +521,9 @@ export default function App() {
   };
   const toggleSound = () => setSoundOn((enabled) => !enabled);
   const toggleMusic = () => setMusicOn((enabled) => !enabled);
+
+  // Keep the actual audio gain synchronized even while a quiz is already playing.
+  useEffect(() => { setAmbientMusicVolume(musicVolume); }, [musicVolume]);
 
   // Background music belongs to an active quiz, not the app's home screen.
   useEffect(() => {
@@ -644,8 +656,17 @@ export default function App() {
     setRemoteFeedback(null);
   };
 
-  return <MotionConfig reducedMotion={reducedMotion ? "always" : "user"}><div className="app-shell" data-theme={theme} data-reduced-motion={reducedMotion ? "true" : "false"} onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => { const target = event.target as HTMLElement; if (view === "quiz" && musicOn) startAmbientMusic();
-    if (soundOn && target.closest("button") && !target.closest(".answer-option")) playUiSound("tap"); }}>
+  return <MotionConfig reducedMotion={reducedMotion ? "always" : "user"}><div className="app-shell" data-theme={theme} data-reduced-motion={reducedMotion ? "true" : "false"} onClick={(event: ReactMouseEvent<HTMLDivElement>) => {
+    // click occurs only after a successful release, including touch and keyboard activation.
+    // A cancelled/held press never triggers the click effect.
+    const target = event.target as Element;
+    if (!target.closest) return;
+    const button = target.closest("button");
+    if (!button || button.disabled) return;
+    // Retry quiz music inside a genuine user gesture if the browser blocked the first attempt.
+    if (view === "quiz" && musicOn) startAmbientMusic();
+    if (soundOn && !button.matches(".answer-option, .profile-theme-choice")) playUiSound("tap");
+  }}>
     <header className="topbar">
       <button className="brand" onClick={()=>setView("home")} aria-label={t("brandHomeLabel")}>
         <span className="brand-mark"><img src={`${import.meta.env.BASE_URL}pi-brain-logo.png`} alt="" width="32" height="32" /></span><span>pi<span className="brand-accent">brain</span></span><span className="brand-beta">{t("cosmicQuiz")}</span>
@@ -673,8 +694,8 @@ export default function App() {
       {view==="home"&&<motion.div key="home" className="page" initial={{opacity:0,scale:.965,y:28,filter:"blur(8px)"}} animate={{opacity:1,scale:1,y:0,filter:"blur(0px)"}} exit={{opacity:0,scale:.985,y:-18,filter:"blur(6px)"}} transition={{type:"spring",stiffness:250,damping:25}}>
         <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/>{t("welcome")}</div><h1>{t("greeting")}</h1><p className="muted">{t("subtitle")}</p></div><div className="level-pill"><Sparkles size={15}/>{t("level")}</div></div>
         <section className="hero-card">
-          <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">{t("liveQuest")}</span></div><h2>{t("heroTitleLine1")}<br/><span>{t("heroTitleLine2")}</span></h2><p>{t("heroDescription")}</p><motion.button className="primary-button hero-cta" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> {t("minutes")}</span><span><CircleHelp size={14}/> {t("stageBasedQuiz")}</span><span><Star size={14}/> +120 XP</span></div></div>
-          <div className="hero-art"><div className="robot-aura"/><div className="robot-figure"><img src="/assets/pi-brain-robot.png" alt={t("coPilot")}/><div className="mascot-tag"><Sparkles size={14}/> {t("coPilot")}</div></div><div className="robot-orbit orbit-a"/><div className="robot-orbit orbit-b"/></div>
+          <div className="hero-copy"><div className="hero-kicker"><span className="sun-dot"/> {t("daily")} <span className="hero-live">{t("liveQuest")}</span></div><h2>{t("heroTitleLine1")}<br/><span>{t("heroTitleLine2")}</span></h2><p><span className="hero-description-desktop">{t("heroDescription")}</span><span className="hero-description-mobile">{normalizeLocale(i18n.language) === "fa" && t("heroDescription").includes("پرسش‌های") ? <><span className="hero-description-line">{t("heroDescription").split("پرسش‌های")[0]}پرسش‌های</span><span className="hero-description-line">{t("heroDescription").split("پرسش‌های").slice(1).join("پرسش‌های").trimStart()}</span></> : t("heroDescription")}</span></p><motion.button className="primary-button hero-cta" onClick={()=>{if (!piAccessToken) {setToast(t("signInForLeaderboard")); return;} if (!availableCategories.length) {setToast(t("questionBankEmpty")); return;} void startQuiz();}} whileHover={{scale:1.035,y:-3}} whileTap={{scale:.94,y:2}} transition={{type:"spring",stiffness:420,damping:17}}><span className="cta-icon"><Play size={16} fill="currentColor"/></span>{t("start")}<ChevronRight size={17}/><span className="button-shine"/></motion.button><div className="hero-meta"><span><ClockIcon/> {t("minutes")}</span><span><CircleHelp size={14}/> {t("stageBasedQuiz")}</span><span><Star size={14}/> +120 XP</span></div></div>
+          <div className="hero-art"><div className="robot-aura"/><div className="robot-figure"><img src="/assets/pi-brain-robot.png" alt="" aria-hidden="true"/></div><div className="robot-orbit orbit-a"/><div className="robot-orbit orbit-b"/></div>
           <div className="hero-orb orb-one"/><div className="hero-orb orb-two"/><div className="hero-spark spark-a">✦</div><div className="hero-spark spark-b">✧</div><div className="hero-spark spark-c">✦</div>
         </section>
         <section className="stat-grid">
@@ -716,6 +737,16 @@ export default function App() {
       <span className={`profile-audio-switch ${musicOn ? "is-on" : ""}`} aria-hidden="true"/>
       <span className="sr-only">{musicOn ? t("on") : t("off")}</span>
     </button>
+    <div className="profile-music-volume">
+      <label htmlFor="background-music-volume">
+        <span>{t("musicVolumeSetting")}</span>
+        <output htmlFor="background-music-volume" dir="ltr">{Math.round(musicVolume * 100)}%</output>
+      </label>
+      <input id="background-music-volume" type="range" min="0" max="100" step="1"
+        value={Math.round(musicVolume * 100)}
+        onChange={(event) => setMusicVolume(Number(event.currentTarget.value) / 100)}
+        aria-valuetext={`${Math.round(musicVolume * 100)}%`}/>
+    </div>
   </div><div className="profile-quiz-language"><label htmlFor="quiz-language-select">{t("quizLanguage")}</label><select id="quiz-language-select" value={quizLanguage} onChange={(event)=>void changeQuizLanguage(event.target.value)}>{localeOptions.map(([code,label])=><option key={code} value={code}>{label}</option>)}</select><p className="muted">{t("quizLanguageHelp")}</p></div><h3>{t("chooseTheme")}</h3><div className="profile-theme-grid">{themes.map((item)=><button type="button" key={item.id} className={`profile-theme-choice ${theme===item.id ? "active" : ""}`} aria-pressed={theme===item.id} onClick={()=>changeTheme(item.id)}><span className="theme-swatches">{item.colors.map((color,j)=><i key={j} style={{background:color}}/>)}</span><span className="theme-name"><b>{t(`theme${item.id[0].toUpperCase()}${item.id.slice(1)}`)}</b><small>{item.mode==="light"?t("lightMode"):t("darkMode")}</small></span>{theme===item.id&&<CheckCircle2 size={17}/>}</button>)}</div><button type="button" className="theme-motion-toggle profile-motion-toggle" onClick={()=>setReducedMotion(value=>!value)} aria-pressed={reducedMotion}>{t("reduceMotion")}<span>{reducedMotion ? t("on") : t("off")}</span></button></section></motion.div>}
       </AnimatePresence>
     </main>

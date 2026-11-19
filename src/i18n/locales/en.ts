@@ -14,6 +14,7 @@ const additional = {
     audioSettingsTitle: "Audio settings",
     soundEffectsSetting: "Sound effects and clicks",
     backgroundMusicSetting: "Background music",
+    musicVolumeSetting: "Music volume",
     questionBankExhausted: "You have answered every approved question in this language and quiz path.",
 
     settings: "Settings",

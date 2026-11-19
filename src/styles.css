@@ -67,3 +67,38 @@
 
 
 .quiz-bank-empty{display:grid;gap:8px;justify-items:start;padding:12px 0}
+
+/* Independent music-level control; 20% is the default gain. */
+.profile-music-volume {
+  display: grid;
+  gap: 12px;
+  padding: 13px 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(130,120,255,.06);
+  min-width: 0;
+}
+.profile-music-volume label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.profile-music-volume output {
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.profile-music-volume input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #826aff;
+}
+.profile-music-volume input[type="range"]:focus-visible {
+  outline: 2px solid #826aff;
+  outline-offset: 6px;
+}

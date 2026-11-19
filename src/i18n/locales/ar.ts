@@ -14,6 +14,7 @@ const additional = {
     audioSettingsTitle: "إعدادات الصوت",
     soundEffectsSetting: "أصوات النقر والمؤثرات",
     backgroundMusicSetting: "موسيقى الخلفية",
+    musicVolumeSetting: "مستوى صوت الموسيقى",
     quizLanguageHelp: "اختر اللغة المستخدمة في أسئلة الاختبار. هذا الإعداد مستقل عن لغة الواجهة.",
     questionBankEmptyForLocale: "لا توجد فئات اختبار معتمدة للغة {{locale}}. يمكن أن تختلف لغة الواجهة عن لغة الاختبار.",
     switchQuizToEnglish: "استخدم الإنجليزية لأسئلة الاختبار",

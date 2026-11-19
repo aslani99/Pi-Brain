@@ -1,0 +1,458 @@
+diff --git a/src/App.tsx b/src/App.tsx
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1,11 +1,11 @@
+-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
++import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+ import { AnimatePresence, MotionConfig, motion } from "framer-motion";
+ import { useTranslation } from "react-i18next";
+ import { Activity, Atom, Award, BrainCircuit, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Cpu, Flame, Globe2, Home, Languages, Leaf, Lightbulb, LockKeyhole, Palette, Play, Sparkles, Star, Trophy, UserRound, X, Orbit, Shapes, Volume2, VolumeX, Music2, Sun, CheckCircle2, Shuffle } from "lucide-react";
+ import i18n, { applyLocale, localeOptions, normalizeLocale } from "./i18n/config";
+ import { hasQuestionTranslation, localizeCategory, localizeCategoryDescription, localizeDifficulty, localizeQuestion } from "./i18n/question-translations";
+ import { categories, questions, type Question } from "./data";
+-import { playUiSound, startAmbientMusic, stopAmbientMusic } from "./audio";
++import { playUiSound, setAmbientMusicVolume, startAmbientMusic, stopAmbientMusic } from "./audio";
+ import { authenticatePiUser, isPiSdkAvailable } from "./services/pi";
+ import { fetchLeaderboard, fetchNextServerQuestion, fetchQuizCatalog, isBackendConfigured, startServerQuiz, submitServerAnswer, type LeaderboardEntry, type PiVerifiedProfile, type ServerQuestion, type UserPreferences, fetchUserPreferences, saveUserPreferences } from "./services/backend";
+ 
+@@ -94,6 +94,7 @@
+   theme: "cosmic",
+   soundEnabled: true,
+   musicEnabled: true,
++  musicVolume: 0.20,
+   reducedMotion: false,
+ };
+ 
+@@ -121,6 +122,8 @@
+       theme: themes.some((item) => item.id === value.theme) ? value.theme! : "cosmic",
+       soundEnabled: typeof value.soundEnabled === "boolean" ? value.soundEnabled : true,
+       musicEnabled: typeof value.musicEnabled === "boolean" ? value.musicEnabled : true,
++      musicVolume: typeof value.musicVolume === "number" && Number.isFinite(value.musicVolume)
++        ? Math.min(1, Math.max(0, value.musicVolume)) : 0.20,
+       reducedMotion: typeof value.reducedMotion === "boolean" ? value.reducedMotion : false,
+     };
+   } catch {
+@@ -162,6 +165,7 @@
+   }, [toast]);
+   const [soundOn, setSoundOn] = useState(() => readLocalPreferences().soundEnabled);
+   const [musicOn, setMusicOn] = useState(() => readLocalPreferences().musicEnabled);
++  const [musicVolume, setMusicVolume] = useState(() => readLocalPreferences().musicVolume ?? 0.20);
+   const [stats, setStats] = useState<LocalStats>(readLocalStats);
+   const [piProfile, setPiProfile] = useState<PiVerifiedProfile | null>(null);
+   const [piAccessToken, setPiAccessToken] = useState<string | null>(null);
+@@ -365,6 +369,7 @@
+         setTheme(themes.some((item) => item.id === restored.theme) ? restored.theme : "cosmic");
+         setSoundOn(restored.soundEnabled);
+         setMusicOn(restored.musicEnabled ?? true);
++        setMusicVolume(typeof restored.musicVolume === "number" ? Math.min(1, Math.max(0, restored.musicVolume)) : 0.20);
+         setReducedMotion(restored.reducedMotion);
+         setPreferencesHydrated(true);
+       } catch (preferenceError) {
+@@ -419,6 +424,7 @@
+       theme,
+       soundEnabled: soundOn,
+       musicEnabled: musicOn,
++      musicVolume,
+       reducedMotion,
+     };
+     if (piProfile && !preferencesHydrated) return;
+@@ -426,7 +432,7 @@
+       localStorage.setItem(preferencesCacheKey(piProfile?.pi_uid), JSON.stringify(preferences));
+     }
+     catch { /* The in-memory settings remain usable if storage is unavailable. */ }
+-  }, [i18n.language, quizLanguage, theme, soundOn, musicOn, reducedMotion, piProfile?.pi_uid, preferencesHydrated]);
++  }, [i18n.language, quizLanguage, theme, soundOn, musicOn, musicVolume, reducedMotion, piProfile?.pi_uid, preferencesHydrated]);
+ 
+   useEffect(() => {
+     const retryWhenOnline = () => setSyncRetry((value) => value + 1);
+@@ -446,6 +452,7 @@
+       theme,
+       soundEnabled: soundOn,
+       musicEnabled: musicOn,
++      musicVolume,
+       reducedMotion,
+     };
+     const timeout = window.setTimeout(async () => {
+@@ -466,6 +473,8 @@
+             setTheme(themes.some((item) => item.id === latest.preferences.theme) ? latest.preferences.theme : "cosmic");
+             setSoundOn(latest.preferences.soundEnabled);
+             setMusicOn(latest.preferences.musicEnabled ?? true);
++            setMusicVolume(typeof latest.preferences.musicVolume === "number"
++              ? Math.min(1, Math.max(0, latest.preferences.musicVolume)) : 0.20);
+             setReducedMotion(latest.preferences.reducedMotion);
+             setToast(t("settingsRestoredFromAnotherDevice"));
+           } catch {
+@@ -477,7 +486,7 @@
+       }
+     }, 650);
+     return () => window.clearTimeout(timeout);
+-  }, [piAccessToken, preferencesHydrated, syncRetry, i18n.language, quizLanguage, theme, soundOn, musicOn, reducedMotion]);
++  }, [piAccessToken, preferencesHydrated, syncRetry, i18n.language, quizLanguage, theme, soundOn, musicOn, musicVolume, reducedMotion]);
+ 
+   useEffect(() => {
+     if (piRestoreAttempted.current) return;
+@@ -512,6 +521,9 @@
+   };
+   const toggleSound = () => setSoundOn((enabled) => !enabled);
+   const toggleMusic = () => setMusicOn((enabled) => !enabled);
++
++  // Keep the actual audio gain synchronized even while a quiz is already playing.
++  useEffect(() => { setAmbientMusicVolume(musicVolume); }, [musicVolume]);
+ 
+   // Background music belongs to an active quiz, not the app's home screen.
+   useEffect(() => {
+@@ -644,8 +656,17 @@
+     setRemoteFeedback(null);
+   };
+ 
+-  return <MotionConfig reducedMotion={reducedMotion ? "always" : "user"}><div className="app-shell" data-theme={theme} data-reduced-motion={reducedMotion ? "true" : "false"} onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => { const target = event.target as HTMLElement; if (view === "quiz" && musicOn) startAmbientMusic();
+-    if (soundOn && target.closest("button") && !target.closest(".answer-option")) playUiSound("tap"); }}>
++  return <MotionConfig reducedMotion={reducedMotion ? "always" : "user"}><div className="app-shell" data-theme={theme} data-reduced-motion={reducedMotion ? "true" : "false"} onClick={(event: ReactMouseEvent<HTMLDivElement>) => {
++    // click occurs only after a successful release, including touch and keyboard activation.
++    // A cancelled/held press never triggers the click effect.
++    const target = event.target as Element;
++    if (!target.closest) return;
++    const button = target.closest("button");
++    if (!button || button.disabled) return;
++    // Retry quiz music inside a genuine user gesture if the browser blocked the first attempt.
++    if (view === "quiz" && musicOn) startAmbientMusic();
++    if (soundOn && !button.matches(".answer-option, .profile-theme-choice")) playUiSound("tap");
++  }}>
+     <header className="topbar">
+       <button className="brand" onClick={()=>setView("home")} aria-label={t("brandHomeLabel")}>
+         <span className="brand-mark"><img src={`${import.meta.env.BASE_URL}pi-brain-logo.png`} alt="" width="32" height="32" /></span><span>pi<span className="brand-accent">brain</span></span><span className="brand-beta">{t("cosmicQuiz")}</span>
+@@ -716,6 +737,16 @@
+       <span className={`profile-audio-switch ${musicOn ? "is-on" : ""}`} aria-hidden="true"/>
+       <span className="sr-only">{musicOn ? t("on") : t("off")}</span>
+     </button>
++    <div className="profile-music-volume">
++      <label htmlFor="background-music-volume">
++        <span>{t("musicVolumeSetting")}</span>
++        <output htmlFor="background-music-volume" dir="ltr">{Math.round(musicVolume * 100)}%</output>
++      </label>
++      <input id="background-music-volume" type="range" min="0" max="100" step="1"
++        value={Math.round(musicVolume * 100)}
++        onChange={(event) => setMusicVolume(Number(event.currentTarget.value) / 100)}
++        aria-valuetext={`${Math.round(musicVolume * 100)}%`}/>
++    </div>
+   </div><div className="profile-quiz-language"><label htmlFor="quiz-language-select">{t("quizLanguage")}</label><select id="quiz-language-select" value={quizLanguage} onChange={(event)=>void changeQuizLanguage(event.target.value)}>{localeOptions.map(([code,label])=><option key={code} value={code}>{label}</option>)}</select><p className="muted">{t("quizLanguageHelp")}</p></div><h3>{t("chooseTheme")}</h3><div className="profile-theme-grid">{themes.map((item)=><button type="button" key={item.id} className={`profile-theme-choice ${theme===item.id ? "active" : ""}`} aria-pressed={theme===item.id} onClick={()=>changeTheme(item.id)}><span className="theme-swatches">{item.colors.map((color,j)=><i key={j} style={{background:color}}/>)}</span><span className="theme-name"><b>{t(`theme${item.id[0].toUpperCase()}${item.id.slice(1)}`)}</b><small>{item.mode==="light"?t("lightMode"):t("darkMode")}</small></span>{theme===item.id&&<CheckCircle2 size={17}/>}</button>)}</div><button type="button" className="theme-motion-toggle profile-motion-toggle" onClick={()=>setReducedMotion(value=>!value)} aria-pressed={reducedMotion}>{t("reduceMotion")}<span>{reducedMotion ? t("on") : t("off")}</span></button></section></motion.div>}
+       </AnimatePresence>
+     </main>
+diff --git a/src/audio.ts b/src/audio.ts
+--- a/src/audio.ts
++++ b/src/audio.ts
+@@ -2,9 +2,11 @@
+ let masterGain: GainNode | null = null;
+ let masterCompressor: DynamicsCompressorNode | null = null;
+ let ambientAudio: HTMLAudioElement | null = null;
++let ambientSource: MediaElementAudioSourceNode | null = null;
++let ambientGain: GainNode | null = null;
+ let ambientStarted = false;
++let musicVolume = 0.20;
+ const SFX_VOLUME = 0.9;
+-const MUSIC_VOLUME = 0.20;
+ 
+ function getContext(): AudioContext | null {
+   if (typeof window === "undefined") return null;
+@@ -122,31 +124,53 @@
+ 
+ function getAmbientAudio() {
+   if (typeof window === "undefined") return null;
+-
+   if (!ambientAudio) {
+     ambientAudio = new Audio(`${import.meta.env.BASE_URL}assets/quiz-ambient.mp3`);
+     ambientAudio.loop = true;
+     ambientAudio.preload = "auto";
+-    ambientAudio.volume = MUSIC_VOLUME;
+   }
+-
+   return ambientAudio;
+ }
+ 
++function connectAmbientAudio(ctx: AudioContext, audio: HTMLAudioElement) {
++  if (ambientGain && ambientSource) return;
++  try {
++    // Use an actual gain node: iOS may ignore HTMLAudioElement.volume entirely.
++    const source = ambientSource ?? ctx.createMediaElementSource(audio);
++    const gain = ambientGain ?? ctx.createGain();
++    gain.gain.setValueAtTime(musicVolume, ctx.currentTime);
++    if (!ambientSource) source.connect(gain);
++    if (!ambientGain) gain.connect(ctx.destination);
++    ambientSource = source;
++    ambientGain = gain;
++    audio.volume = 1; // The Web Audio node, not the media element, controls the volume.
++  } catch {
++    // Fallback for older embedded browsers without MediaElementAudioSourceNode.
++    audio.volume = musicVolume;
++  }
++}
++
++export function setAmbientMusicVolume(value: number) {
++  if (!Number.isFinite(value)) return;
++  musicVolume = Math.min(1, Math.max(0, value));
++  if (ambientGain && audioContext) {
++    ambientGain.gain.setTargetAtTime(musicVolume, audioContext.currentTime, 0.012);
++  } else if (ambientAudio) {
++    ambientAudio.volume = musicVolume;
++  }
++}
++
+ export function startAmbientMusic() {
+-  getContext();
+-
++  const ctx = getContext();
+   const audio = getAmbientAudio();
+   if (!audio) return;
+ 
+-  audio.volume = MUSIC_VOLUME;
++  if (ctx) connectAmbientAudio(ctx, audio);
++  else audio.volume = musicVolume;
+ 
+   if (ambientStarted && !audio.paused) return;
+-
+   ambientStarted = true;
+-  void audio.play().catch(() => {
+-    ambientStarted = false;
+-  });
++  void audio.play().catch(() => { ambientStarted = false; });
+ }
+ 
+ export function stopAmbientMusic() {
+diff --git a/src/services/backend.ts b/src/services/backend.ts
+--- a/src/services/backend.ts
++++ b/src/services/backend.ts
+@@ -152,6 +152,7 @@
+   theme: string;
+   soundEnabled: boolean;
+   musicEnabled: boolean;
++  musicVolume?: number;
+   reducedMotion: boolean;
+ };
+ 
+diff --git a/src/styles.css b/src/styles.css
+--- a/src/styles.css
++++ b/src/styles.css
+@@ -67,3 +67,38 @@
+ 
+ 
+ .quiz-bank-empty{display:grid;gap:8px;justify-items:start;padding:12px 0}
++
++/* Independent music-level control; 20% is the default gain. */
++.profile-music-volume {
++  display: grid;
++  gap: 12px;
++  padding: 13px 14px 16px;
++  border: 1px solid var(--line);
++  border-radius: 14px;
++  background: rgba(130,120,255,.06);
++  min-width: 0;
++}
++.profile-music-volume label {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 10px;
++  font-size: 13px;
++  font-weight: 650;
++}
++.profile-music-volume output {
++  font-size: 12px;
++  font-weight: 750;
++  font-variant-numeric: tabular-nums;
++}
++.profile-music-volume input[type="range"] {
++  width: 100%;
++  min-width: 0;
++  margin: 0;
++  cursor: pointer;
++  accent-color: #826aff;
++}
++.profile-music-volume input[type="range"]:focus-visible {
++  outline: 2px solid #826aff;
++  outline-offset: 6px;
++}
+diff --git a/src/theme.css b/src/theme.css
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -1290,3 +1290,49 @@
+ .app-shell .hero-card .hero-copy p {
+   text-shadow: 0 1px 2px rgba(6, 9, 22, .78) !important;
+ }
++
++/* Compact, truly centred notifications. Framer Motion animates transform,
++   so centring MUST NOT depend on translateX(-50%). */
++.app-shell .toast {
++  position: fixed;
++  left: 0;
++  right: 0;
++  margin-inline: auto;
++  width: min(420px, calc(100vw - 24px));
++  min-width: 0;
++  max-width: calc(100vw - 24px);
++  max-height: min(45dvh, 280px);
++  box-sizing: border-box;
++  padding: 10px 12px;
++  gap: 9px;
++  font-size: clamp(11px, 2.65vw, 13px);
++  line-height: 1.5;
++  overflow-x: hidden;
++  overflow-y: auto;
++  overflow-wrap: anywhere;
++}
++.app-shell .toast-message {
++  display: block;
++  flex: 1 1 auto;
++  min-width: 0;
++  max-width: 100%;
++  white-space: normal;
++  overflow-wrap: anywhere;
++  word-break: normal;
++}
++.app-shell .toast button {
++  display: grid;
++  place-items: center;
++  width: 28px;
++  height: 28px;
++  flex: 0 0 28px;
++}
++@media (max-width: 850px) {
++  .app-shell .toast {
++    left: max(12px, env(safe-area-inset-left, 0px));
++    right: max(12px, env(safe-area-inset-right, 0px));
++    width: auto;
++    max-width: none;
++    bottom: calc(75px + env(safe-area-inset-bottom, 0px));
++  }
++}
+diff --git a/src/i18n/locales/en.ts b/src/i18n/locales/en.ts
+--- a/src/i18n/locales/en.ts
++++ b/src/i18n/locales/en.ts
+@@ -14,6 +14,7 @@
+     audioSettingsTitle: "Audio settings",
+     soundEffectsSetting: "Sound effects and clicks",
+     backgroundMusicSetting: "Background music",
++    musicVolumeSetting: "Music volume",
+     questionBankExhausted: "You have answered every approved question in this language and quiz path.",
+ 
+     settings: "Settings",
+diff --git a/src/i18n/locales/fa.ts b/src/i18n/locales/fa.ts
+--- a/src/i18n/locales/fa.ts
++++ b/src/i18n/locales/fa.ts
+@@ -14,6 +14,7 @@
+     audioSettingsTitle: "تنظیمات صدا",
+     soundEffectsSetting: "صدای کلیک و جلوه‌های صوتی",
+     backgroundMusicSetting: "موسیقی پس‌زمینه",
++    musicVolumeSetting: "میزان صدای موسیقی",
+     quizLanguageHelp: "زبان نمایش پرسش‌ها را انتخاب کنید. این گزینه مستقل از زبان رابط کاربری است.",
+     questionBankExhausted: "همهٔ پرسش‌های تأییدشدهٔ این زبان و مسیر آزمون را پاسخ داده‌ای.",
+ 
+diff --git a/src/i18n/locales/ar.ts b/src/i18n/locales/ar.ts
+--- a/src/i18n/locales/ar.ts
++++ b/src/i18n/locales/ar.ts
+@@ -14,6 +14,7 @@
+     audioSettingsTitle: "إعدادات الصوت",
+     soundEffectsSetting: "أصوات النقر والمؤثرات",
+     backgroundMusicSetting: "موسيقى الخلفية",
++    musicVolumeSetting: "مستوى صوت الموسيقى",
+     quizLanguageHelp: "اختر اللغة المستخدمة في أسئلة الاختبار. هذا الإعداد مستقل عن لغة الواجهة.",
+     questionBankEmptyForLocale: "لا توجد فئات اختبار معتمدة للغة {{locale}}. يمكن أن تختلف لغة الواجهة عن لغة الاختبار.",
+     switchQuizToEnglish: "استخدم الإنجليزية لأسئلة الاختبار",
+diff --git a/src/i18n/locales/de.ts b/src/i18n/locales/de.ts
+--- a/src/i18n/locales/de.ts
++++ b/src/i18n/locales/de.ts
+@@ -3,6 +3,7 @@
+     audioSettingsTitle: "Audioeinstellungen",
+     soundEffectsSetting: "Klick- und Soundeffekte",
+     backgroundMusicSetting: "Hintergrundmusik",
++    musicVolumeSetting: "Musiklautstärke",
+     quizLanguageHelp: "Wähle die Sprache der Quizfragen. Diese Einstellung ist unabhängig von der Oberflächensprache.",
+     questionBankEmptyForLocale: "Für die Quizsprache {{locale}} sind keine freigegebenen Kategorien verfügbar. Die Oberflächensprache kann von der Quizsprache abweichen.",
+     switchQuizToEnglish: "Englisch für Quizfragen verwenden",
+diff --git a/src/i18n/locales/es.ts b/src/i18n/locales/es.ts
+--- a/src/i18n/locales/es.ts
++++ b/src/i18n/locales/es.ts
+@@ -3,6 +3,7 @@
+     audioSettingsTitle: "Ajustes de audio",
+     soundEffectsSetting: "Clics y efectos de sonido",
+     backgroundMusicSetting: "Música de fondo",
++    musicVolumeSetting: "Volumen de la música",
+     quizLanguageHelp: "Elige el idioma de las preguntas. Esta opción es independiente del idioma de la interfaz.",
+     questionBankEmptyForLocale: "No hay categorías aprobadas para el idioma {{locale}}. El idioma de la interfaz puede ser distinto del idioma del cuestionario.",
+     switchQuizToEnglish: "Usar inglés para las preguntas",
+diff --git a/src/i18n/locales/fr.ts b/src/i18n/locales/fr.ts
+--- a/src/i18n/locales/fr.ts
++++ b/src/i18n/locales/fr.ts
+@@ -3,6 +3,7 @@
+     audioSettingsTitle: "Paramètres audio",
+     soundEffectsSetting: "Clics et effets sonores",
+     backgroundMusicSetting: "Musique de fond",
++    musicVolumeSetting: "Volume de la musique",
+     quizLanguageHelp: "Choisissez la langue des questions. Ce réglage est indépendant de la langue de l’interface.",
+     questionBankEmptyForLocale: "Aucune catégorie de quiz approuvée n’est disponible pour la langue {{locale}}. La langue de l’interface peut être différente.",
+     switchQuizToEnglish: "Utiliser l’anglais pour les questions",
+diff --git a/src/i18n/locales/ru.ts b/src/i18n/locales/ru.ts
+--- a/src/i18n/locales/ru.ts
++++ b/src/i18n/locales/ru.ts
+@@ -3,6 +3,7 @@
+     audioSettingsTitle: "Настройки звука",
+     soundEffectsSetting: "Звуки нажатий и эффекты",
+     backgroundMusicSetting: "Фоновая музыка",
++    musicVolumeSetting: "Громкость музыки",
+     quizLanguageHelp: "Выберите язык вопросов. Этот параметр не зависит от языка интерфейса.",
+     questionBankEmptyForLocale: "Для языка викторины {{locale}} нет одобренных категорий. Язык интерфейса может отличаться от языка вопросов.",
+     switchQuizToEnglish: "Использовать английский для вопросов",
+diff --git a/src/i18n/locales/tr.ts b/src/i18n/locales/tr.ts
+--- a/src/i18n/locales/tr.ts
++++ b/src/i18n/locales/tr.ts
+@@ -14,6 +14,7 @@
+     audioSettingsTitle: "Ses ayarları",
+     soundEffectsSetting: "Tıklama ve efekt sesleri",
+     backgroundMusicSetting: "Arka plan müziği",
++    musicVolumeSetting: "Müzik ses seviyesi",
+     quizLanguageHelp: "Soruların gösterileceği dili seç. Bu ayar arayüz dilinden bağımsızdır.",
+     questionBankEmptyForLocale: "{{locale}} sınav dili için onaylanmış kategori bulunmuyor. Arayüz dili ile sınav dili farklı olabilir.",
+     switchQuizToEnglish: "Sorular için İngilizce kullan",
+diff --git a/src/i18n/locales/hi.ts b/src/i18n/locales/hi.ts
+--- a/src/i18n/locales/hi.ts
++++ b/src/i18n/locales/hi.ts
+@@ -3,6 +3,7 @@
+     audioSettingsTitle: "ऑडियो सेटिंग्स",
+     soundEffectsSetting: "क्लिक और ध्वनि प्रभाव",
+     backgroundMusicSetting: "बैकग्राउंड संगीत",
++    musicVolumeSetting: "संगीत की आवाज़",
+     quizLanguageHelp: "प्रश्नों की भाषा चुनें। यह सेटिंग इंटरफ़ेस की भाषा से स्वतंत्र है।",
+     questionBankEmptyForLocale: "{{locale}} क्विज़ भाषा के लिए कोई स्वीकृत श्रेणी उपलब्ध नहीं है। इंटरफ़ेस और क्विज़ की भाषाएँ अलग हो सकती हैं।",
+     switchQuizToEnglish: "प्रश्नों के लिए अंग्रेज़ी इस्तेमाल करें",
+diff --git a/src/i18n/locales/zh.ts b/src/i18n/locales/zh.ts
+--- a/src/i18n/locales/zh.ts
++++ b/src/i18n/locales/zh.ts
+@@ -3,6 +3,7 @@
+     audioSettingsTitle: "音频设置",
+     soundEffectsSetting: "点击音效",
+     backgroundMusicSetting: "背景音乐",
++    musicVolumeSetting: "音乐音量",
+     quizLanguageHelp: "选择测验题目的语言。此设置独立于界面语言。",
+     questionBankEmptyForLocale: "测验语言 {{locale}} 暂无已批准的类别。界面语言可以与测验语言不同。",
+     switchQuizToEnglish: "使用英语显示测验题目",
+diff --git a/src/i18n/locales/ja.ts b/src/i18n/locales/ja.ts
+--- a/src/i18n/locales/ja.ts
++++ b/src/i18n/locales/ja.ts
+@@ -3,6 +3,7 @@
+     audioSettingsTitle: "音声設定",
+     soundEffectsSetting: "クリック音と効果音",
+     backgroundMusicSetting: "バックグラウンド音楽",
++    musicVolumeSetting: "音楽の音量",
+     quizLanguageHelp: "クイズの問題に使用する言語を選択します。この設定は画面表示の言語とは独立しています。",
+     questionBankEmptyForLocale: "クイズ言語 {{locale}} で承認済みのカテゴリーはありません。画面表示の言語とクイズの言語は異なっていてもかまいません。",
+     switchQuizToEnglish: "問題に英語を使用する",
+diff --git a/src/i18n/locales/pt.ts b/src/i18n/locales/pt.ts
+--- a/src/i18n/locales/pt.ts
++++ b/src/i18n/locales/pt.ts
+@@ -3,6 +3,7 @@
+     audioSettingsTitle: "Configurações de áudio",
+     soundEffectsSetting: "Sons de clique e efeitos",
+     backgroundMusicSetting: "Música de fundo",
++    musicVolumeSetting: "Volume da música",
+     quizLanguageHelp: "Escolha o idioma das perguntas. Esta configuração é independente do idioma da interface.",
+     questionBankEmptyForLocale: "Não há categorias aprovadas para o idioma {{locale}}. O idioma da interface pode ser diferente do idioma do questionário.",
+     switchQuizToEnglish: "Usar inglês nas perguntas",

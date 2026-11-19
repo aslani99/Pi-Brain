@@ -3,6 +3,7 @@ const additional = {
     audioSettingsTitle: "ऑडियो सेटिंग्स",
     soundEffectsSetting: "क्लिक और ध्वनि प्रभाव",
     backgroundMusicSetting: "बैकग्राउंड संगीत",
+    musicVolumeSetting: "संगीत की आवाज़",
     quizLanguageHelp: "प्रश्नों की भाषा चुनें। यह सेटिंग इंटरफ़ेस की भाषा से स्वतंत्र है।",
     questionBankEmptyForLocale: "{{locale}} क्विज़ भाषा के लिए कोई स्वीकृत श्रेणी उपलब्ध नहीं है। इंटरफ़ेस और क्विज़ की भाषाएँ अलग हो सकती हैं।",
     switchQuizToEnglish: "प्रश्नों के लिए अंग्रेज़ी इस्तेमाल करें",

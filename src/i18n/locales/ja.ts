@@ -3,6 +3,7 @@ const additional = {
     audioSettingsTitle: "音声設定",
     soundEffectsSetting: "クリック音と効果音",
     backgroundMusicSetting: "バックグラウンド音楽",
+    musicVolumeSetting: "音楽の音量",
     quizLanguageHelp: "クイズの問題に使用する言語を選択します。この設定は画面表示の言語とは独立しています。",
     questionBankEmptyForLocale: "クイズ言語 {{locale}} で承認済みのカテゴリーはありません。画面表示の言語とクイズの言語は異なっていてもかまいません。",
     switchQuizToEnglish: "問題に英語を使用する",

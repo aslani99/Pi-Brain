@@ -724,6 +724,35 @@ body:has(.app-shell[data-theme="light"])::before { opacity:.16; background-image
   .app-shell .toast { transition: none !important; }
 }
 
+/* Flip only the home-hero robot on left-to-right interfaces. Using the
+   independent scale property keeps the existing floating animation intact;
+   the caption, icons and other robot usages are never mirrored. */
+html[dir="ltr"] .hero-card .robot-figure > img { scale: -1 1; }
+html[dir="rtl"] .hero-card .robot-figure > img { scale: 1 1; }
+
+/* Keep the robot inside the hero on tablet/desktop too; the image is
+   anchored to the outer inline edge with a narrow 5px safety inset. */
+@media (min-width: 561px) {
+  .hero-card .hero-art {
+    overflow: hidden;
+    padding-block-start: 5px;
+    padding-inline-end: 2px;
+    box-sizing: border-box;
+  }
+  .hero-card .robot-figure > img {
+    height: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    animation: hero-safe-float 4.6s ease-in-out infinite;
+  }
+  html[dir="ltr"] .hero-card .robot-figure > img { object-position: right top; }
+  html[dir="rtl"] .hero-card .robot-figure > img { object-position: left top; }
+  @keyframes hero-safe-float {
+    0%, 100% { transform: translateY(0) rotate(-.4deg); }
+    50% { transform: translateY(4px) rotate(.4deg); }
+  }
+}
+
 /* Keep the desktop artwork and its caption as independent positioned children.
    On phones the figure becomes a single group, so its caption can be precisely
    centred below the robot regardless of writing direction. */
@@ -806,7 +835,7 @@ body:has(.app-shell[data-theme="light"])::before { opacity:.16; background-image
     margin-bottom: 2px;
   }
   .hero-copy h2 {
-    font-size: clamp(16px, 4.6vw, 25px);
+    font-size: clamp(17px, 4.95vw, 27px);
     line-height: 1.1;
     letter-spacing: -.45px;
     overflow-wrap: normal;
@@ -819,8 +848,9 @@ body:has(.app-shell[data-theme="light"])::before { opacity:.16; background-image
 
   .hero-copy p {
     font-size: clamp(10px, 2.65vw, 12px);
-    line-height: 1.45;
-    max-width: 100%;
+    line-height: 1.47;
+    max-width: 18.5ch;
+    color: #f4eee3;
     overflow-wrap: normal;
     margin-bottom: 2px;
   }
@@ -868,8 +898,10 @@ body:has(.app-shell[data-theme="light"])::before { opacity:.16; background-image
     min-width: 0;
     min-height: 0;
     margin: 0;
-    padding: 0;
     overflow: hidden;
+    padding-block-start: 5px;
+    padding-inline-end: 2px;
+    box-sizing: border-box;
     opacity: 1;
     pointer-events: none;
   }
@@ -878,16 +910,16 @@ body:has(.app-shell[data-theme="light"])::before { opacity:.16; background-image
   .robot-figure {
     position: relative;
     display: flex;
-    flex: 0 0 70%;
+    flex: 0 0 74%;
     flex-direction: column;
     align-items: center;
     justify-content: flex-end;
-    width: 70%;
+    width: 74%;
     height: 100%;
     min-width: 0;
     min-height: 0;
     margin: 0;
-    padding: 0 0 4px;
+    padding: 0 0 0;
     pointer-events: none;
   }
   /* flex-end naturally flips between LTR/right and RTL/left. */
@@ -911,15 +943,24 @@ body:has(.app-shell[data-theme="light"])::before { opacity:.16; background-image
     0%, 100% { transform: translateY(2px); }
     50% { transform: translateY(-3px); }
   }
+  @keyframes hero-mobile-float-flipped {
+    0%, 100% { transform: scaleX(-1) translateY(2px); }
+    50% { transform: scaleX(-1) translateY(-3px); }
+  }
+  html[dir="ltr"] .hero-art img {
+    object-position: right bottom;
+    animation-name: hero-mobile-float-flipped;
+  }
+  html[dir="rtl"] .hero-art img { object-position: left bottom; }
   .robot-aura { width: 220px; height: 220px; }
   .robot-orbit { width: 240px; height: 70px; top: 52%; }
   .robot-figure .mascot-tag {
-    position: relative;
+    position: absolute;
     top: auto;
     right: auto;
-    left: auto;
-    bottom: auto;
-    inset-inline-start: auto;
+    left: 50%;
+    bottom: 0;
+    inset-inline-start: 50%;
     inset-inline-end: auto;
     z-index: 2;
     display: inline-flex;
@@ -927,9 +968,9 @@ body:has(.app-shell[data-theme="light"])::before { opacity:.16; background-image
     align-self: center;
     justify-content: center;
     width: max-content;
-    max-width: 100%;
+    max-width: calc(100% - 8px);
     padding: 3px 5px;
-    margin: 1px 0 0;
+    margin: 0;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -941,7 +982,7 @@ body:has(.app-shell[data-theme="light"])::before { opacity:.16; background-image
     line-height: 1.25;
     white-space: nowrap;
     text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 10px rgba(0,0,0,.8);
-    transform: none;
+    transform: translateX(-50%);
   }
 
   .app-shell[data-theme="light"] .hero-kicker,
@@ -957,13 +998,341 @@ body:has(.app-shell[data-theme="light"])::before { opacity:.16; background-image
     text-shadow: 0 1px 3px rgba(255,255,255,.98), 0 0 10px rgba(255,255,255,.92);
   }
 }
+/* Three compact stats: prevent the mobile labels from growing into tall
+   one-word-per-line cards. Secondary captions remain visible on tablets. */
+@media (max-width: 560px) {
+  .stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .stat-card {
+    min-width: 0;
+    min-height: 0;
+    height: 92px;
+    padding: 8px 5px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+    text-align: center;
+  }
+  .stat-card .stat-icon {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    border-radius: 8px;
+  }
+  .stat-card .stat-icon svg { width: 14px; height: 14px; }
+  .stat-card > div:last-child {
+    display: flex;
+    min-width: 0;
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .stat-card strong {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    font-size: 16px;
+    line-height: 1.12;
+  }
+  .stat-card strong small,
+  .stat-card:nth-child(3) > div:last-child > span {
+    display: -webkit-box;
+    max-width: 100%;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    text-wrap: balance;
+    font-size: clamp(8px, 2.45vw, 10px);
+    line-height: 1.22;
+    text-align: center;
+  }
+  .stat-card:nth-child(-n+2) > div:last-child > span {
+    display: none;
+  }
+}
+
 @media (max-width: 350px) {
   .hero-card { padding: 20px 10px 22px; }
-  .hero-copy { flex-basis: 73%; width: 73%; max-width: 73%; }
+   .hero-copy { flex-basis: 72%; width: 72%; max-width: 72%; }
   .hero-copy h2 { font-size: clamp(15px, 4.7vw, 17px); }
-  .robot-figure { flex-basis: 71%; width: 71%; }
+    .robot-figure { flex-basis: 75%; width: 75%; }
   .robot-figure .mascot-tag { margin-inline: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-art img { animation: none; }
+}
+
+/* Readable quiz-hero description in all viewport sizes and supported themes. */
+.app-shell:not([data-theme="light"]) .hero-copy p {
+  text-shadow: 0 1px 3px rgba(255,255,255,.82), 0 0 10px rgba(255,255,255,.52);
+}
+.app-shell[data-theme="light"] .hero-copy p {
+  text-shadow: 0 1px 3px rgba(0,0,0,.72), 0 0 10px rgba(0,0,0,.38);
+}
+
+
+/* Fixed-size mobile mascot and fixed-width quiz-hero description.
+   The mascot is a positioned decoration; changes in phone width cannot
+   change its intrinsic display dimensions or increase the hero height. */
+.hero-description-mobile { display: none; }
+
+@media (max-width: 560px) {
+  .hero-card .hero-art {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: -150;
+  }
+
+  .hero-card .hero-art .robot-figure {
+    position: absolute;
+    inset-block-start: 3px;
+    inset-inline-end: 2px;
+    inset-block-end: auto;
+    inset-inline-start: auto;
+    display: block;
+    width: 184px;
+    height: 220px;
+    min-width: 184px;
+    max-width: 184px;
+    min-height: 220px;
+    max-height: 220px;
+    padding: 0;
+    margin: 0;
+    flex: none;
+    transform: none;
+  }
+
+  .hero-card .hero-art .robot-figure > img {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    inset-block-end: auto;
+    display: block;
+    width: 184px;
+    height: 201px;
+    max-width: none;
+    max-height: none;
+    min-width: 184px;
+    min-height: 201px;
+    object-fit: contain;
+    object-position: center center;
+    animation: none;
+    transform: none;
+  }
+
+  /* The caption is centered beneath the fixed-size picture, not the card. */
+  .hero-card .robot-figure .mascot-tag {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 201px;
+    bottom: auto;
+    inset-inline-start: 0;
+    inset-inline-end: 0;
+    width: max-content;
+    max-width: 184px;
+    margin: 0 auto;
+    transform: none;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  .hero-card .hero-copy p {
+    width: 190px;
+    min-width: 190px;
+    max-width: 190px;
+    margin-bottom: 2px;
+    color: #f4eee3;
+    font-size: 11px;
+    line-height: 1.46;
+  }
+
+  .hero-description-desktop { display: none; }
+  .hero-description-mobile {
+    display: -webkit-box;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: normal;
+  }
+}
+
+
+/* Quiz hero, mobile: retain the complete description in two deliberate
+   Persian lines. The art is decorative: it never determines card height. */
+@media (max-width: 560px) {
+  .hero-card .hero-copy p {
+    position: relative;
+    z-index: 5;
+    flex: none;
+    width: 270px;
+    min-width: 270px;
+    max-width: 270px;
+    color: #f4eee3;
+    font-size: 11px;
+    line-height: 1.48;
+    text-shadow: 0 1px 2px rgba(6, 9, 22, .78) !important;
+    overflow: visible;
+  }
+  .hero-description-mobile {
+    display: block;
+    width: 270px;
+    min-width: 270px;
+    max-width: 270px;
+    overflow: visible;
+    white-space: normal;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+  }
+  .hero-description-mobile .hero-description-line {
+    display: block;
+    white-space: nowrap;
+  }
+
+  /* Full-height, aspect-ratio-preserving mascot; 5px outer inset on every
+     mobile width. Text stays on top of the art. */
+  .hero-card .hero-art {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -150;
+    padding: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .hero-card .hero-art .robot-figure {
+    position: absolute;
+    inset-block-start: 5px;
+    inset-inline-end: -10px;
+    inset-block-end: 5px;
+    inset-inline-start: auto;
+    width: auto;
+    height: calc(100% - 10px);
+    min-width: 0;
+    max-width: 82%;
+    min-height: 0;
+    max-height: none;
+    aspect-ratio: 1199 / 1312;
+    display: block;
+    flex: none;
+    margin: 0;
+    padding: 0;
+    transform: none;
+  }
+  .hero-card .hero-art .robot-figure > img {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 0;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: center top;
+    animation: none;
+    transform: none;
+  }
+  /* Keep the independent scale flip declared above. Do NOT flip with
+     transform as well: two X-axis mirrors cancel each other. */
+  html[dir="ltr"] .hero-card .hero-art .robot-figure > img {
+    scale: -1 1;
+    transform: none;
+  }
+  html[dir="rtl"] .hero-card .hero-art .robot-figure > img {
+    scale: 1 1;
+    transform: none;
+  }
+  .hero-card .hero-art .robot-figure .mascot-tag {
+    position: absolute;
+    bottom: 0;
+    top: auto;
+    left: 0;
+    right: 0;
+    inset-inline-start: 0;
+    inset-inline-end: 0;
+    width: max-content;
+    max-width: 100%;
+    margin-inline: auto;
+    transform: none;
+    white-space: nowrap;
+    text-align: center;
+    z-index: 2;
+  }
+}
+
+/* Consistent small (2px) shadow for the home-hero description in every theme. */
+.app-shell .hero-card .hero-copy p {
+  text-shadow: 0 1px 2px rgba(6, 9, 22, .78) !important;
+}
+
+/* Compact, truly centred notifications. Framer Motion animates transform,
+   so centring MUST NOT depend on translateX(-50%). */
+.app-shell .toast {
+  position: fixed;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: min(420px, calc(100vw - 24px));
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+  max-height: min(45dvh, 280px);
+  box-sizing: border-box;
+  padding: 10px 12px;
+  gap: 9px;
+  font-size: clamp(11px, 2.65vw, 13px);
+  line-height: 1.5;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.app-shell .toast-message {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.app-shell .toast button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+@media (max-width: 850px) {
+  .app-shell .toast {
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    width: auto;
+    max-width: none;
+    bottom: calc(75px + env(safe-area-inset-bottom, 0px));
+  }
 }

@@ -2,9 +2,11 @@ let audioContext: AudioContext | null = null;
 let masterGain: GainNode | null = null;
 let masterCompressor: DynamicsCompressorNode | null = null;
 let ambientAudio: HTMLAudioElement | null = null;
+let ambientSource: MediaElementAudioSourceNode | null = null;
+let ambientGain: GainNode | null = null;
 let ambientStarted = false;
+let musicVolume = 0.20;
 const SFX_VOLUME = 0.9;
-const MUSIC_VOLUME = 0.20;
 
 function getContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -122,31 +124,53 @@ export function playUiSound(kind: "tap" | "select" | "success" | "wrong" = "tap"
 
 function getAmbientAudio() {
   if (typeof window === "undefined") return null;
-
   if (!ambientAudio) {
     ambientAudio = new Audio(`${import.meta.env.BASE_URL}assets/quiz-ambient.mp3`);
     ambientAudio.loop = true;
     ambientAudio.preload = "auto";
-    ambientAudio.volume = MUSIC_VOLUME;
   }
-
   return ambientAudio;
 }
 
-export function startAmbientMusic() {
-  getContext();
+function connectAmbientAudio(ctx: AudioContext, audio: HTMLAudioElement) {
+  if (ambientGain && ambientSource) return;
+  try {
+    // Use an actual gain node: iOS may ignore HTMLAudioElement.volume entirely.
+    const source = ambientSource ?? ctx.createMediaElementSource(audio);
+    const gain = ambientGain ?? ctx.createGain();
+    gain.gain.setValueAtTime(musicVolume, ctx.currentTime);
+    if (!ambientSource) source.connect(gain);
+    if (!ambientGain) gain.connect(ctx.destination);
+    ambientSource = source;
+    ambientGain = gain;
+    audio.volume = 1; // The Web Audio node, not the media element, controls the volume.
+  } catch {
+    // Fallback for older embedded browsers without MediaElementAudioSourceNode.
+    audio.volume = musicVolume;
+  }
+}
 
+export function setAmbientMusicVolume(value: number) {
+  if (!Number.isFinite(value)) return;
+  musicVolume = Math.min(1, Math.max(0, value));
+  if (ambientGain && audioContext) {
+    ambientGain.gain.setTargetAtTime(musicVolume, audioContext.currentTime, 0.012);
+  } else if (ambientAudio) {
+    ambientAudio.volume = musicVolume;
+  }
+}
+
+export function startAmbientMusic() {
+  const ctx = getContext();
   const audio = getAmbientAudio();
   if (!audio) return;
 
-  audio.volume = MUSIC_VOLUME;
+  if (ctx) connectAmbientAudio(ctx, audio);
+  else audio.volume = musicVolume;
 
   if (ambientStarted && !audio.paused) return;
-
   ambientStarted = true;
-  void audio.play().catch(() => {
-    ambientStarted = false;
-  });
+  void audio.play().catch(() => { ambientStarted = false; });
 }
 
 export function stopAmbientMusic() {

@@ -14,6 +14,7 @@ const additional = {
     audioSettingsTitle: "Ses ayarları",
     soundEffectsSetting: "Tıklama ve efekt sesleri",
     backgroundMusicSetting: "Arka plan müziği",
+    musicVolumeSetting: "Müzik ses seviyesi",
     quizLanguageHelp: "Soruların gösterileceği dili seç. Bu ayar arayüz dilinden bağımsızdır.",
     questionBankEmptyForLocale: "{{locale}} sınav dili için onaylanmış kategori bulunmuyor. Arayüz dili ile sınav dili farklı olabilir.",
     switchQuizToEnglish: "Sorular için İngilizce kullan",

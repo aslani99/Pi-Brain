@@ -3,6 +3,7 @@ const additional = {
     audioSettingsTitle: "Audioeinstellungen",
     soundEffectsSetting: "Klick- und Soundeffekte",
     backgroundMusicSetting: "Hintergrundmusik",
+    musicVolumeSetting: "Musiklautstärke",
     quizLanguageHelp: "Wähle die Sprache der Quizfragen. Diese Einstellung ist unabhängig von der Oberflächensprache.",
     questionBankEmptyForLocale: "Für die Quizsprache {{locale}} sind keine freigegebenen Kategorien verfügbar. Die Oberflächensprache kann von der Quizsprache abweichen.",
     switchQuizToEnglish: "Englisch für Quizfragen verwenden",

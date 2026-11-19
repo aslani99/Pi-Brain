@@ -3,6 +3,7 @@ const additional = {
     audioSettingsTitle: "Настройки звука",
     soundEffectsSetting: "Звуки нажатий и эффекты",
     backgroundMusicSetting: "Фоновая музыка",
+    musicVolumeSetting: "Громкость музыки",
     quizLanguageHelp: "Выберите язык вопросов. Этот параметр не зависит от языка интерфейса.",
     questionBankEmptyForLocale: "Для языка викторины {{locale}} нет одобренных категорий. Язык интерфейса может отличаться от языка вопросов.",
     switchQuizToEnglish: "Использовать английский для вопросов",

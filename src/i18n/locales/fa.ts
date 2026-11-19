@@ -14,6 +14,7 @@ const additional = {
     audioSettingsTitle: "تنظیمات صدا",
     soundEffectsSetting: "صدای کلیک و جلوه‌های صوتی",
     backgroundMusicSetting: "موسیقی پس‌زمینه",
+    musicVolumeSetting: "میزان صدای موسیقی",
     quizLanguageHelp: "زبان نمایش پرسش‌ها را انتخاب کنید. این گزینه مستقل از زبان رابط کاربری است.",
     questionBankExhausted: "همهٔ پرسش‌های تأییدشدهٔ این زبان و مسیر آزمون را پاسخ داده‌ای.",
 

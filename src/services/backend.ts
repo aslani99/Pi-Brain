@@ -152,6 +152,7 @@ export type UserPreferences = {
   theme: string;
   soundEnabled: boolean;
   musicEnabled: boolean;
+  musicVolume?: number;
   reducedMotion: boolean;
 };
 
