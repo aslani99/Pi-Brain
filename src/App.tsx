@@ -7,6 +7,7 @@ import { hasQuestionTranslation, localizeCategory, localizeCategoryDescription, 
 import { categories, questions, type Question } from "./data";
 import { playUiSound, setAmbientMusicVolume, startAmbientMusic, stopAmbientMusic } from "./audio";
 import { authenticatePiUser, isPiSdkAvailable } from "./services/pi";
+import { recordCompletedQuizForAds, showInterstitialAtQuizBreak } from "./services/pi-ads";
 import { fetchLeaderboard, fetchNextServerQuestion, fetchQuizCatalog, isBackendConfigured, startServerQuiz, submitServerAnswer, type LeaderboardEntry, type PiVerifiedProfile, type ServerQuestion, type UserPreferences, fetchUserPreferences, saveUserPreferences } from "./services/backend";
 
 const iconMap: Record<string, any> = { Atom, Globe2, Cpu, Leaf, BrainCircuit, Palette, Orbit, Shapes, Shuffle };
@@ -696,10 +697,18 @@ export default function App() {
     else stopAmbientMusic();
     return () => stopAmbientMusic();
   }, [view, musicOn]);
+  // Prevent double-taps from launching a quiz behind a native ad overlay.
+  const quizStartBusyRef = useRef(false);
   const startQuiz = async (category?:string) => {
+    if (quizStartBusyRef.current) return;
+    quizStartBusyRef.current = true;
     const pathKey = category || "__random__";
     if (piAccessToken) {
       try {
+        // Only show Pi's native interstitial at a natural break: after three
+        // completed quizzes, when the user explicitly starts another one.
+        // Unsupported, unavailable or failed ads never prevent a new quiz.
+        await showInterstitialAtQuizBreak();
         const remote = await startServerQuiz(piAccessToken, pathKey, quizLanguage);
         const firstQuestion = remote.questions[0];
         if (!firstQuestion) throw new Error(t("serverQuestionLoadError"));
@@ -726,8 +735,11 @@ export default function App() {
         // A Pi-authenticated user must never silently fall back to local demo data.
         setToast(localizeError(error, "genericError"));
         return;
+      } finally {
+        quizStartBusyRef.current = false;
       }
     }
+    quizStartBusyRef.current = false;
 
     // Never substitute local English demo questions for missing reviewed locale content.
     setToast(t("signInForLeaderboard"));
@@ -797,7 +809,12 @@ export default function App() {
   };
   const nextQuestion = async () => {
     const totalQuestions = quizMeta?.questionCount ?? sessionQuestions.length;
-    if (qIndex >= totalQuestions - 1) { setView("result"); return; }
+    if (qIndex >= totalQuestions - 1) {
+      // Record a completed (not merely started) server quiz only once.
+      recordCompletedQuizForAds(remoteSessionId);
+      setView("result");
+      return;
+    }
 
     if (remoteSessionId && piAccessToken) {
       setQuestionLoading(true);
