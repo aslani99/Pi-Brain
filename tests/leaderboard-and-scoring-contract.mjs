@@ -26,7 +26,7 @@ test("server grades a wrong answer by at most three XP, never negative", () => {
 
 test("local fallback scoring and result displays match total XP", () => {
   const app = read("src/App.tsx");
-  assert.match(app, /Math\.max\(0, stats\.totalXp \+ \(isCorrect \? 15 : -3\)\)/);
+  assert.match(app, /Math\.max\(0, stats\.totalXp \+ \(isCorrect \? 5 : -3\)\)/);
   assert.match(app, /stats\.totalXp\.toLocaleString\(\)\} XP/);
   assert.match(app, /participantCountBanner/);
   assert.match(app, /rank-winner-trophy/);
@@ -39,4 +39,33 @@ test("all supported languages have participant count and compact description", (
       assert.equal((text.match(new RegExp(`\\b${key}:`, "g")) ?? []).length, 1, `${lang}: ${key}`);
     }
   }
+});
+
+
+test("current database scoring is +5 on correct and up to -3 on wrong", () => {
+  const sql = read("supabase/migrations/20261119180000_correct_answer_five_xp.sql");
+  assert.match(sql, /v_points := case when v_correct then 5 else -least\(v_profile\.total_xp, 3\)::integer end/);
+  assert.match(sql, /greatest\(0, total_xp \+ v_points\)/);
+  const app = read("src/App.tsx");
+  assert.match(app, /setLastPointsDelta\(isCorrect \? 5 : -Math\.min\(3, stats\.totalXp\)\)/);
+  assert.match(app, /\+5 \/ −3 XP/);
+});
+
+test("mobile hero uses full translation, and winner's trophy is outside rank column", () => {
+  const app = read("src/App.tsx");
+  assert.match(app, /<p>\{t\("heroDescription"\)\}<\/p>/);
+  assert.doesNotMatch(app, /t\("heroDescriptionCompact"\)/);
+  assert.match(app, /entry\.rank === 1 && <Trophy className="rank-winner-trophy"/);
+  assert.match(app, /<span className=\{`rank rank-\$\{entry\.rank\}`\} dir="ltr">\{entry\.rank\}<\/span>/);
+});
+
+
+test("leaderboard list is left-to-right in all locales without forcing usernames to LTR", () => {
+  const app = read("src/App.tsx");
+  const css = read("src/theme.css");
+  assert.match(app, /className="leader-row" dir="ltr"/);
+  assert.match(app, /className="leaderboard-entries" dir="ltr"/);
+  assert.match(app, /className="panel ranking-panel" dir="ltr"/);
+  assert.match(app, /className="leader-username" dir="auto"/);
+  assert.match(css, /\.app-shell \.leaderboard-entries \.leader-row,.*\.app-shell \.ranking-panel/si);
 });

@@ -1421,3 +1421,150 @@ html[dir="rtl"] .hero-card .robot-figure > img { scale: 1 1; }
 .app-shell .feedback-xp-negative { color: #ff8693; }
 .app-shell[data-theme="light"] .feedback-xp-positive { color: #137c57; }
 .app-shell[data-theme="light"] .feedback-xp-negative { color: #b8374b; }
+
+
+/* Keep the full localized hero description, not a shortened replacement.
+   On phones, give it a dedicated bottom line area inside the hero card,
+   outside the mascot's image bounds. No text clipping or line clamping. */
+@media (max-width: 560px) {
+  .app-shell .hero-card {
+    min-height: 306px;
+    align-items: flex-start;
+    padding-bottom: 89px;
+  }
+  .app-shell .hero-card .hero-copy {
+    position: static;
+  }
+  .app-shell .hero-card .hero-copy > p {
+    position: absolute;
+    inset-inline-start: 15px;
+    inset-inline-end: 15px;
+    bottom: 14px;
+    top: auto;
+    z-index: 3;
+    display: block;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: normal;
+    text-wrap: pretty;
+    font-size: clamp(9px, 2.65vw, 11px);
+    line-height: 1.42;
+    text-align: start;
+  }
+  /* Reserve the lower band for copy instead of enlarging the mascot
+     to fill the extra card height. The image's side position is preserved. */
+  .app-shell .hero-card .hero-art .robot-figure {
+    height: clamp(210px, 45vw, 244px);
+    max-height: calc(100% - 92px);
+    width: auto;
+    max-width: 82%;
+  }
+}
+
+/* Trophy behind the leaderboard introduction, larger but decorative. */
+.app-shell .ranking-intro {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 62px;
+  padding: 9px 14px;
+  margin-block: 4px 12px;
+  text-align: center;
+}
+.app-shell .ranking-intro > span { position: relative; z-index: 1; }
+.app-shell .ranking-intro-trophy {
+  position: absolute;
+  inset-inline-start: 50%;
+  top: 50%;
+  transform: translate(50%, -50%);
+  color: #f6c54f;
+  width: 56px;
+  height: 56px;
+  opacity: .21;
+  z-index: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 7px rgba(247,197,80,.2));
+}
+html[dir="ltr"] .app-shell .ranking-intro-trophy {
+  transform: translate(-50%, -50%);
+}
+
+/* The first-place trophy has its own space at the outer edge;
+   all rank numbers have the same fixed-width column. */
+.app-shell .leader-row {
+  position: relative;
+  padding-inline-start: 25px;
+}
+.app-shell .leader-row .rank {
+  width: 30px;
+  min-width: 30px;
+  max-width: 30px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+.app-shell .leader-row > .rank-winner-trophy {
+  position: absolute;
+  inset-inline-start: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 19px;
+  height: 19px;
+  pointer-events: none;
+}
+@media (max-width: 560px) {
+  .app-shell .leader-row {
+    gap: 8px;
+    padding-inline-start: 22px;
+  }
+  .app-shell .leader-row .rank {
+    width: 26px;
+    min-width: 26px;
+    max-width: 26px;
+    flex-basis: 26px;
+  }
+  .app-shell .leader-row > .rank-winner-trophy {
+    width: 17px;
+    height: 17px;
+    inset-inline-start: 1px;
+  }
+}
+
+
+/* Top-account lists always run from left to right in every interface locale.
+   A username still uses dir="auto" so Persian/Arabic names remain readable. */
+.app-shell .leaderboard-entries,
+.app-shell .leaderboard-entries .leader-row,
+.app-shell .ranking-panel {
+  direction: ltr;
+}
+.app-shell .leaderboard-entries .leader-row:hover {
+  padding-left: 25px;
+  padding-right: 0;
+}
+@media (max-width: 560px) {
+  .app-shell .leaderboard-entries .leader-row:hover {
+    padding-left: 22px;
+    padding-right: 0;
+  }
+}
+
+/* Trophy is centered behind the translated leaderboard heading, including RTL. */
+.app-shell .ranking-intro-trophy,
+html[dir="ltr"] .app-shell .ranking-intro-trophy {
+  left: 50%;
+  right: auto;
+  inset-inline-start: auto;
+  transform: translate(-50%, -50%);
+}
