@@ -22,8 +22,14 @@ demoTranslationUnavailable: 'Некоторые демонстрационные
   };
 const status = { documentTitle: "Pi Brain — мысли шире", documentDescription: "Pi Brain — ваше космическое приключение-викторина. Исследуйте, играйте и расширяйте знания.", progressSummary: "Правильных ответов: {{correct}} из {{total}}. Продолжай исследовать!", settingsRestoredFromAnotherDevice: "Восстановлены последние настройки с другого устройства.", demoMode: "Демо", you: "Вы", signedOut: "Вы вышли из Pi. Выберите подключение Pi, чтобы войти снова.", themeCosmic: "Космос", themeLight: "Светлая", themeOcean: "Океан", themeAurora: "Аврора", themeSunset: "Закат", themeRoyal: "Королевская", themeRose: "Роза", oneDay: "+1 день", mascotCelebrating: "Празднующий робот Pi Brain" };
 
+const answerStatLabels = {
+  correctAnswersStat: "Верные ответы",
+  wrongAnswersStat: "Неверные ответы",
+};
+
 const resource = {
   ...base.translation,
+  ...answerStatLabels,
   ...additional,
   ...status,
 };

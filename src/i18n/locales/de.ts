@@ -22,8 +22,14 @@ demoTranslationUnavailable: 'Einige Demo-Fragen sind noch nicht in diese Sprache
   };
 const status = { documentTitle: "Pi Brain — Denk weiter", documentDescription: "Pi Brain — dein kosmisches Quiz-Abenteuer. Entdecke, spiele und erweitere dein Wissen.", progressSummary: "{{correct}} richtige Antworten von {{total}}. Entdecke weiter!", settingsRestoredFromAnotherDevice: "Deine neuesten Einstellungen von einem anderen Gerät wurden wiederhergestellt.", demoMode: "Demo", you: "Du", signedOut: "Du hast dich von Pi abgemeldet. Wähle die Pi-Verbindung, um dich erneut anzumelden.", themeCosmic: "Kosmisch", themeLight: "Hell", themeOcean: "Ozean", themeAurora: "Aurora", themeSunset: "Sonnenuntergang", themeRoyal: "Königlich", themeRose: "Rose", oneDay: "+1 Tag", mascotCelebrating: "Feiernder Pi-Brain-Roboter" };
 
+const answerStatLabels = {
+  correctAnswersStat: "Richtige Antworten",
+  wrongAnswersStat: "Falsche Antworten",
+};
+
 const resource = {
   ...base.translation,
+  ...answerStatLabels,
   ...additional,
   ...status,
 };

@@ -22,8 +22,14 @@ demoTranslationUnavailable: '部分演示题目尚未翻译成该语言。请在
   };
 const status = { documentTitle: "Pi Brain — 思考更广阔", documentDescription: "Pi Brain — 你的宇宙知识问答冒险。探索、畅玩并不断增长知识。", progressSummary: "{{total}} 题中答对 {{correct}} 题。继续探索！", settingsRestoredFromAnotherDevice: "已恢复你在另一台设备上的最新设置。", demoMode: "演示", you: "你", signedOut: "你已退出 Pi。选择 Pi 连接即可重新登录。", themeCosmic: "宇宙", themeLight: "浅色", themeOcean: "海洋", themeAurora: "极光", themeSunset: "日落", themeRoyal: "皇家", themeRose: "玫瑰", oneDay: "+1 天", mascotCelebrating: "正在庆祝的 Pi Brain 机器人" };
 
+const answerStatLabels = {
+  correctAnswersStat: "正确回答",
+  wrongAnswersStat: "错误回答",
+};
+
 const resource = {
   ...base.translation,
+  ...answerStatLabels,
   ...additional,
   ...status,
 };

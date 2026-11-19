@@ -42,8 +42,14 @@ const leaderboardLabels = {
 
 const status = { documentTitle: "Pi Brain — Think Beyond", documentDescription: "Pi Brain — your cosmic quiz adventure. Explore, play and rise in knowledge.", progressSummary: "{{correct}} correct answers out of {{total}}. Keep exploring!", settingsRestoredFromAnotherDevice: "Your latest settings from another device have been restored.", demoMode: "Demo", you: "You", signedOut: "You have signed out of Pi. Select Pi connection to sign in again.", themeCosmic: "Cosmic", themeLight: "Light", themeOcean: "Ocean", themeAurora: "Aurora", themeSunset: "Sunset", themeRoyal: "Royal", themeRose: "Rose", oneDay: "+1 day", mascotCelebrating: "Pi Brain robot celebrating" };
 
+const answerStatLabels = {
+  correctAnswersStat: "Correct answers",
+  wrongAnswersStat: "Wrong answers",
+};
+
 const resource = {
   ...base.translation,
+  ...answerStatLabels,
   ...additional,
   ...status,
   ...leaderboardLabels,

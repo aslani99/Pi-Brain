@@ -22,8 +22,14 @@ demoTranslationUnavailable: '一部のデモ問題はまだその言語に翻訳
   };
 const status = { documentTitle: "Pi Brain — その先を考えよう", documentDescription: "Pi Brain — 宇宙を舞台にしたクイズの冒険。探索し、楽しみながら知識を広げよう。", progressSummary: "{{total}}問中{{correct}}問正解。探索を続けよう！", settingsRestoredFromAnotherDevice: "別の端末で使用していた最新の設定を復元しました。", demoMode: "デモ", you: "あなた", signedOut: "Pi からログアウトしました。再度ログインするには Pi 接続を選択してください。", themeCosmic: "コズミック", themeLight: "ライト", themeOcean: "オーシャン", themeAurora: "オーロラ", themeSunset: "サンセット", themeRoyal: "ロイヤル", themeRose: "ローズ", oneDay: "+1 日", mascotCelebrating: "お祝いする Pi Brain ロボット" };
 
+const answerStatLabels = {
+  correctAnswersStat: "正解数",
+  wrongAnswersStat: "不正解数",
+};
+
 const resource = {
   ...base.translation,
+  ...answerStatLabels,
   ...additional,
   ...status,
 };

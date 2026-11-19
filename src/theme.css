@@ -1572,3 +1572,92 @@ html[dir="ltr"] .app-shell .ranking-intro-trophy {
   inset-inline-start: auto;
   transform: translate(-50%, -50%);
 }
+
+
+/* Five synchronized progress counters on Home and Profile. */
+.app-shell .stat-grid.stat-grid-expanded {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.app-shell .stat-grid.stat-grid-expanded .stat-card {
+  min-width: 0;
+  overflow: hidden;
+}
+.app-shell .stat-grid.stat-grid-expanded .stat-card strong,
+.app-shell .stat-grid.stat-grid-expanded .stat-card span {
+  overflow-wrap: anywhere;
+}
+.app-shell .stat-grid.stat-grid-expanded .stat-icon.correct {
+  color: #51e5a6;
+  background: rgba(45, 203, 137, .15);
+}
+.app-shell .stat-grid.stat-grid-expanded .stat-icon.incorrect {
+  color: #ff9a9e;
+  background: rgba(245, 111, 126, .14);
+}
+.app-shell .profile-metrics.profile-metrics-expanded {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+}
+.app-shell .profile-metrics.profile-metrics-expanded > div {
+  min-width: 0;
+  padding-inline: 7px;
+  overflow-wrap: anywhere;
+}
+.app-shell .profile-metrics.profile-metrics-expanded b {
+  font-variant-numeric: tabular-nums;
+}
+.app-shell .profile-metrics.profile-metrics-expanded small {
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  /* Three cards on the first row, two centered on the second row. */
+  .app-shell .stat-grid.stat-grid-expanded,
+  .app-shell .profile-metrics.profile-metrics-expanded {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .app-shell .stat-grid.stat-grid-expanded > .stat-card,
+  .app-shell .profile-metrics.profile-metrics-expanded > div {
+    grid-column: span 2;
+  }
+  .app-shell .stat-grid.stat-grid-expanded > .stat-card:nth-child(4),
+  .app-shell .profile-metrics.profile-metrics-expanded > div:nth-child(4) {
+    grid-column: 2 / span 2;
+  }
+  .app-shell .stat-grid.stat-grid-expanded > .stat-card:nth-child(5),
+  .app-shell .profile-metrics.profile-metrics-expanded > div:nth-child(5) {
+    grid-column: 4 / span 2;
+  }
+  .app-shell .profile-metrics.profile-metrics-expanded > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 70px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 8px 5px;
+  }
+}
+@media (max-width: 560px) {
+  .app-shell .stat-grid.stat-grid-expanded { gap: 6px; }
+  .app-shell .stat-grid.stat-grid-expanded > .stat-card {
+    height: 92px;
+    padding: 8px 4px;
+  }
+  .app-shell .stat-grid.stat-grid-expanded > .stat-card:nth-child(n + 4) > div:last-child > span {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    font-size: clamp(8px, 2.45vw, 10px);
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+  .app-shell .profile-metrics.profile-metrics-expanded b { font-size: 18px; }
+  .app-shell .profile-metrics.profile-metrics-expanded small { font-size: 9px; }
+}

@@ -22,8 +22,14 @@ demoTranslationUnavailable: 'कुछ डेमो प्रश्नों क
   };
 const status = { documentTitle: "Pi Brain — आगे की सोचें", documentDescription: "Pi Brain — आपका ब्रह्मांडीय क्विज़ रोमांच। खोजें, खेलें और अपना ज्ञान बढ़ाएँ।", progressSummary: "{{total}} में से {{correct}} सही उत्तर। खोज जारी रखें!", settingsRestoredFromAnotherDevice: "दूसरे डिवाइस से आपकी नवीनतम सेटिंग बहाल कर दी गई हैं।", demoMode: "डेमो", you: "आप", signedOut: "आपने Pi से साइन आउट कर लिया है। फिर से साइन इन करने के लिए Pi कनेक्शन चुनें।", themeCosmic: "कॉस्मिक", themeLight: "लाइट", themeOcean: "महासागर", themeAurora: "ऑरोरा", themeSunset: "सूर्यास्त", themeRoyal: "रॉयल", themeRose: "गुलाब", oneDay: "+1 दिन", mascotCelebrating: "जश्न मनाता Pi Brain रोबोट" };
 
+const answerStatLabels = {
+  correctAnswersStat: "सही उत्तर",
+  wrongAnswersStat: "गलत उत्तर",
+};
+
 const resource = {
   ...base.translation,
+  ...answerStatLabels,
   ...additional,
   ...status,
 };

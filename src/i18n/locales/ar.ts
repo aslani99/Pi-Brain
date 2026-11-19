@@ -33,8 +33,14 @@ demoTranslationUnavailable: 'لم تُترجم بعض أسئلة العرض إل
   };
 const status = { documentTitle: "Pi Brain — فكّر أبعد", documentDescription: "Pi Brain — مغامرتك المعرفية الكونية. اكتشف والعب ووسّع آفاق معرفتك.", progressSummary: "{{correct}} إجابات صحيحة من أصل {{total}}. واصل الاستكشاف!", settingsRestoredFromAnotherDevice: "تمت استعادة أحدث إعداداتك من جهاز آخر.", demoMode: "تجريبي", you: "أنت", signedOut: "لقد سجلت الخروج من Pi. اختر الاتصال بـ Pi لتسجيل الدخول مجدداً.", themeCosmic: "كوني", themeLight: "فاتح", themeOcean: "محيطي", themeAurora: "الشفق القطبي", themeSunset: "غروب", themeRoyal: "ملكي", themeRose: "وردي", oneDay: "+١ يوم", mascotCelebrating: "روبوت باي برين يحتفل" };
 
+const answerStatLabels = {
+  correctAnswersStat: "الإجابات الصحيحة",
+  wrongAnswersStat: "الإجابات الخاطئة",
+};
+
 const resource = {
   ...base.translation,
+  ...answerStatLabels,
   ...additional,
   ...status,
 };

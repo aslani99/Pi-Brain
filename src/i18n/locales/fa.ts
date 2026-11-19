@@ -41,8 +41,14 @@ const leaderboardLabels = {
 
 const status = { documentTitle: "پای\u200cبرین — فراتر بیندیش", documentDescription: "پای\u200cبرین؛ ماجراجویی دانشی تو در جهان آزمون\u200cهای کیهانی. کشف کن، بازی کن و دانشت را گسترش بده.", progressSummary: "{{correct}} پاسخ درست از {{total}} پاسخ. به کشف ادامه بده!", settingsRestoredFromAnotherDevice: "آخرین تنظیماتت از دستگاه دیگر بازیابی شد.", demoMode: "نمایشی", you: "شما", signedOut: "از Pi خارج شدی. برای ورود دوباره، اتصال Pi را انتخاب کن.", themeCosmic: "کیهانی", themeLight: "روشن", themeOcean: "اقیانوسی", themeAurora: "شفق قطبی", themeSunset: "غروب", themeRoyal: "سلطنتی", themeRose: "رز", oneDay: "+۱ روز", mascotCelebrating: "ربات پای‌برین در حال شادی" };
 
+const answerStatLabels = {
+  correctAnswersStat: "پاسخ‌های درست",
+  wrongAnswersStat: "پاسخ‌های غلط",
+};
+
 const resource = {
   ...base.translation,
+  ...answerStatLabels,
   ...additional,
   ...status,
   ...leaderboardLabels,

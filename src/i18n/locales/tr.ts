@@ -33,8 +33,14 @@ demoTranslationUnavailable: 'Bazı demo soruları henüz bu dile çevrilmedi. Bu
   };
 const status = { documentTitle: "Pi Brain — Sınırların Ötesinde Düşün", documentDescription: "Pi Brain — kozmik bilgi yarışması maceran. Keşfet, oyna ve bilgini geliştir.", progressSummary: "{{total}} sorudan {{correct}} doğru. Keşfetmeye devam et!", settingsRestoredFromAnotherDevice: "Başka bir cihazdaki en yeni ayarların geri yüklendi.", demoMode: "Demo", you: "Sen", signedOut: "Pi oturumunu kapattın. Yeniden giriş yapmak için Pi bağlantısını seç.", themeCosmic: "Kozmik", themeLight: "Açık", themeOcean: "Okyanus", themeAurora: "Aurora", themeSunset: "Gün batımı", themeRoyal: "Kraliyet", themeRose: "Gül", oneDay: "+1 gün", mascotCelebrating: "Kutlama yapan Pi Brain robotu" };
 
+const answerStatLabels = {
+  correctAnswersStat: "Doğru yanıtlar",
+  wrongAnswersStat: "Yanlış yanıtlar",
+};
+
 const resource = {
   ...base.translation,
+  ...answerStatLabels,
   ...additional,
   ...status,
 };
